@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://vou-falar-com-meu-socio.lcdev.click/sitemap.xml
