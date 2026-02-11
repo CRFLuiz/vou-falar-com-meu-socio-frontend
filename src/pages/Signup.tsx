@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { MainLayout } from '../layouts/MainLayout';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 export const Signup = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
-        name: '',
         email: '',
-        password: '',
-        professional_title: ''
+        password: ''
     });
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -42,12 +42,12 @@ export const Signup = () => {
                 throw new Error(data.message || 'Signup failed');
             }
 
-            setSuccess('User created successfully! Redirecting to login...');
+            setSuccess(t('signup_success'));
             setTimeout(() => {
                 navigate('/login');
             }, 2000);
         } catch (err: any) {
-            setError(err.message || 'An error occurred during signup');
+            setError(err.message || t('signup_error'));
         } finally {
             setLoading(false);
         }
@@ -57,58 +57,36 @@ export const Signup = () => {
         <MainLayout>
              <section className="hero">
                 <div className="hero-container">
-                    <h2 className="section-title">Sign Up</h2>
+                    <h2 className="section-title">{t('signup_title')}</h2>
                     <div className="contact-form-wrapper" style={{maxWidth: '400px', margin: '0 auto'}}>
                          <form className="contact-form" onSubmit={handleSubmit}>
                             {error && <div style={{color: 'red', marginBottom: '10px'}}>{error}</div>}
                             {success && <div style={{color: '#00ffff', marginBottom: '10px'}}>{success}</div>}
                             
                             <div className="form-group">
-                                <label htmlFor="name">Name</label>
-                                <input 
-                                    type="text" 
-                                    id="name" 
-                                    placeholder="Enter name" 
-                                    required 
-                                    value={formData.name}
-                                    onChange={handleChange}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label htmlFor="professional_title">Professional Title</label>
-                                <input 
-                                    type="text" 
-                                    id="professional_title" 
-                                    placeholder="Enter professional title" 
-                                    required 
-                                    value={formData.professional_title}
-                                    onChange={handleChange}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label htmlFor="email">Email</label>
+                                <label htmlFor="email">{t('email_label')}</label>
                                 <input 
                                     type="email" 
                                     id="email" 
-                                    placeholder="Enter email" 
+                                    placeholder={t('contact_email_placeholder')} 
                                     required 
                                     value={formData.email}
                                     onChange={handleChange}
                                 />
                             </div>
                             <div className="form-group">
-                                <label htmlFor="password">Password</label>
+                                <label htmlFor="password">{t('password_label')}</label>
                                 <input 
                                     type="password" 
                                     id="password" 
-                                    placeholder="Enter password" 
+                                    placeholder={t('login_password_placeholder')} 
                                     required 
                                     value={formData.password}
                                     onChange={handleChange}
                                 />
                             </div>
                             <button type="submit" className="btn-primary btn-submit" disabled={loading}>
-                                {loading ? 'Signing up...' : 'Sign Up'}
+                                {loading ? t('signup_loading') : t('signup_btn')}
                             </button>
                         </form>
                     </div>

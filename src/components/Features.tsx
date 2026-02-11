@@ -1,4 +1,8 @@
+import { useTranslation } from 'react-i18next';
+
 export const Features = () => {
+    const { t } = useTranslation();
+
     return (
         <section className="features fade-up" id="features">
             <div className="features-container">

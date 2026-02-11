@@ -1,4 +1,8 @@
+import { useTranslation } from 'react-i18next';
+
 export const Pricing = () => {
+    const { t } = useTranslation();
+
     return (
         <section className="pricing fade-up" id="pricing">
             <div className="pricing-container">
@@ -11,7 +15,7 @@ export const Pricing = () => {
                     <div className="pricing-card">
                         <div className="plan-name">Lorem</div>
                         <div className="plan-price">$49</div>
-                        <div className="plan-period">per ipsum</div>
+                        <div className="plan-period">{t('pricing_plan_period')}</div>
                         <ul className="plan-features">
                             <li>Lorem ipsum dolor</li>
                             <li>Sit amet consectetur</li>
@@ -25,7 +29,7 @@ export const Pricing = () => {
                     <div className="pricing-card featured">
                         <div className="plan-name">Ipsum</div>
                         <div className="plan-price">$149</div>
-                        <div className="plan-period">per dolor</div>
+                        <div className="plan-period">{t('pricing_plan_period')}</div>
                         <ul className="plan-features">
                             <li>Ut enim ad minim</li>
                             <li>Veniam quis nostrud</li>
@@ -40,7 +44,7 @@ export const Pricing = () => {
                     <div className="pricing-card">
                         <div className="plan-name">Dolor</div>
                         <div className="plan-price">$399</div>
-                        <div className="plan-period">per amet</div>
+                        <div className="plan-period">{t('pricing_plan_period')}</div>
                         <ul className="plan-features">
                             <li>Duis aute irure</li>
                             <li>Dolor in reprehenderit</li>

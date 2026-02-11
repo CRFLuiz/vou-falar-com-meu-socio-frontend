@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export const Stats = () => {
+    const { t } = useTranslation();
     const sectionRef = useRef<HTMLElement>(null);
 
     useEffect(() => {
