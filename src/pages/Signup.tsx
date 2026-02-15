@@ -46,8 +46,9 @@ export const Signup = () => {
             setTimeout(() => {
                 navigate('/login');
             }, 2000);
-        } catch (err: any) {
-            setError(err.message || t('signup_error'));
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : t('signup_error');
+            setError(message);
         } finally {
             setLoading(false);
         }
