@@ -14,7 +14,7 @@ cp .env.example .env
 |----------|-------------|---------|
 | `VITE_API_URL` | URL of the Backend API. | `http://localhost:3000/api` |
 
-**Note:** In the Docker Compose environment, requests to `/api` are proxied by Nginx to the backend container, so the frontend usually communicates with the relative path `/api` or the full public URL.
+**Note:** In the current infrastructure setup, Nginx exposes the backend via the API subdomain (for example: `https://api.vou-falar-com-meu-socio.lcdev.click`). If the frontend is making requests to `/api/*` as a relative path, you must ensure your reverse proxy routes `/api/*` to the backend, or update the frontend to call the API subdomain directly.
 
 ## Vite Configuration (`vite.config.ts`)
 The `server.allowedHosts` configuration has been updated to allow the public domain:
