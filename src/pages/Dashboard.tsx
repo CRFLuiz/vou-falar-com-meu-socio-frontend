@@ -358,6 +358,51 @@ export const Dashboard = () => {
                                     onChange={handleProfileChange}
                                     rows={4}
                                 />
+                                <div style={{ marginTop: '12px' }}>
+                                    <button
+                                        type="button"
+                                        className="btn-secondary"
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.9rem 1.2rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '10px',
+                                            letterSpacing: '1px',
+                                            textTransform: 'none'
+                                        }}
+                                    >
+                                        <svg
+                                            width="18"
+                                            height="18"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            aria-hidden="true"
+                                        >
+                                            <path
+                                                d="M12 2l1.2 4.1L17 7l-3.8 1L12 12l-1.2-4L7 7l3.8-.9L12 2Z"
+                                                stroke="currentColor"
+                                                strokeWidth="1.8"
+                                                strokeLinejoin="round"
+                                            />
+                                            <path
+                                                d="M19 12l.8 2.7L22 15l-2.2.7L19 18l-.8-2.3L16 15l2.2-.3L19 12Z"
+                                                stroke="currentColor"
+                                                strokeWidth="1.8"
+                                                strokeLinejoin="round"
+                                            />
+                                            <path
+                                                d="M5 13l.8 2.7L8 16l-2.2.7L5 19l-.8-2.3L2 16l2.2-.3L5 13Z"
+                                                stroke="currentColor"
+                                                strokeWidth="1.8"
+                                                strokeLinejoin="round"
+                                            />
+                                        </svg>
+                                        <span>{t('profile_help_with_required')}</span>
+                                    </button>
+                                </div>
                             </div>
 
                             <div style={{ color: 'var(--primary-cyan)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
