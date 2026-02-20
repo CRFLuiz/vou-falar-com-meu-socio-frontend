@@ -25,12 +25,20 @@ export const Dashboard = () => {
         name: string | null;
         professional_title: string | null;
         professional_description: string | null;
+        rate: string | null;
+        hours_per_day: string | null;
+        days_per_week: number | null;
+        level: string | null;
     } | null>(null);
 
     const [profileForm, setProfileForm] = useState({
         name: '',
         professional_title: '',
-        professional_description: ''
+        professional_description: '',
+        rate: '',
+        hours_per_day: '',
+        days_per_week: '',
+        level: ''
     });
 
     const [profileError, setProfileError] = useState('');
@@ -67,13 +75,35 @@ export const Dashboard = () => {
                     typeof (parsed as { professional_description?: unknown }).professional_description === 'string'
                         ? (parsed as { professional_description: string }).professional_description
                         : null;
+                const rate =
+                    'rate' in parsed && (typeof (parsed as { rate?: unknown }).rate === 'string' || typeof (parsed as { rate?: unknown }).rate === 'number')
+                        ? String((parsed as { rate: string | number }).rate)
+                        : null;
+                const hoursPerDay =
+                    'hours_per_day' in parsed &&
+                    (typeof (parsed as { hours_per_day?: unknown }).hours_per_day === 'string' ||
+                        typeof (parsed as { hours_per_day?: unknown }).hours_per_day === 'number')
+                        ? String((parsed as { hours_per_day: string | number }).hours_per_day)
+                        : null;
+                const daysPerWeek =
+                    'days_per_week' in parsed && typeof (parsed as { days_per_week?: unknown }).days_per_week === 'number'
+                        ? (parsed as { days_per_week: number }).days_per_week
+                        : null;
+                const level =
+                    'level' in parsed && typeof (parsed as { level?: unknown }).level === 'string'
+                        ? (parsed as { level: string }).level
+                        : null;
 
                 return {
                     id,
                     email,
                     name,
                     professional_title: professionalTitle,
-                    professional_description: professionalDescription
+                    professional_description: professionalDescription,
+                    rate,
+                    hours_per_day: hoursPerDay,
+                    days_per_week: daysPerWeek,
+                    level
                 };
             } catch {
                 return null;
@@ -85,21 +115,49 @@ export const Dashboard = () => {
         setProfileForm({
             name: nextAuthUser?.name ?? '',
             professional_title: nextAuthUser?.professional_title ?? '',
-            professional_description: nextAuthUser?.professional_description ?? ''
+            professional_description: nextAuthUser?.professional_description ?? '',
+            rate: nextAuthUser?.rate ?? '',
+            hours_per_day: nextAuthUser?.hours_per_day ?? '',
+            days_per_week: typeof nextAuthUser?.days_per_week === 'number' ? String(nextAuthUser.days_per_week) : '',
+            level: nextAuthUser?.level ?? ''
         });
-        setShowProfileModal(
-            Boolean(
-                nextAuthUser &&
-                (!nextAuthUser.name || nextAuthUser.name.trim().length === 0 ||
-                    !nextAuthUser.professional_title || nextAuthUser.professional_title.trim().length === 0 ||
-                    !nextAuthUser.professional_description || nextAuthUser.professional_description.trim().length === 0)
-            )
+        const parseNumber = (value: string | null) => {
+            if (typeof value !== 'string') return null;
+            const trimmed = value.trim();
+            if (!trimmed) return null;
+            const parsed = Number(trimmed);
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+
+        const rateNumber = parseNumber(nextAuthUser?.rate ?? null);
+        const hoursPerDayNumber = parseNumber(nextAuthUser?.hours_per_day ?? null);
+        const daysPerWeekNumber = typeof nextAuthUser?.days_per_week === 'number' ? nextAuthUser.days_per_week : null;
+
+        const isProfileComplete = Boolean(
+            nextAuthUser &&
+            nextAuthUser.name &&
+            nextAuthUser.name.trim().length > 0 &&
+            nextAuthUser.professional_title &&
+            nextAuthUser.professional_title.trim().length > 0 &&
+            nextAuthUser.professional_description &&
+            nextAuthUser.professional_description.trim().length > 0 &&
+            rateNumber !== null &&
+            rateNumber > 0 &&
+            hoursPerDayNumber !== null &&
+            hoursPerDayNumber > 0 &&
+            hoursPerDayNumber <= 24 &&
+            daysPerWeekNumber !== null &&
+            Number.isInteger(daysPerWeekNumber) &&
+            daysPerWeekNumber >= 1 &&
+            daysPerWeekNumber <= 7
         );
+
+        setShowProfileModal(Boolean(nextAuthUser && !isProfileComplete));
     }, []);
 
     const email = authUser?.email ?? null;
 
-    const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         setProfileForm((prev) => ({
             ...prev,
             [e.target.id]: e.target.value
@@ -118,9 +176,37 @@ export const Dashboard = () => {
         const name = profileForm.name.trim();
         const professionalTitle = profileForm.professional_title.trim();
         const professionalDescription = profileForm.professional_description.trim();
+        const rateInput = profileForm.rate.trim();
+        const hoursPerDayInput = profileForm.hours_per_day.trim();
+        const daysPerWeekInput = profileForm.days_per_week.trim();
+        const level = profileForm.level.trim();
 
-        if (!name || !professionalTitle || !professionalDescription) {
+        if (!name || !professionalTitle || !professionalDescription || !rateInput || !hoursPerDayInput || !daysPerWeekInput) {
             setProfileError(t('profile_required_fields'));
+            return;
+        }
+
+        const rate = Number(rateInput);
+        const hoursPerDay = Number(hoursPerDayInput);
+        const daysPerWeek = Number(daysPerWeekInput);
+
+        if (
+            !Number.isFinite(rate) ||
+            rate <= 0 ||
+            !Number.isFinite(hoursPerDay) ||
+            hoursPerDay <= 0 ||
+            hoursPerDay > 24 ||
+            !Number.isFinite(daysPerWeek) ||
+            !Number.isInteger(daysPerWeek) ||
+            daysPerWeek < 1 ||
+            daysPerWeek > 7
+        ) {
+            setProfileError(t('profile_invalid_numbers'));
+            return;
+        }
+
+        if (level && level !== 'junior' && level !== 'pleno' && level !== 'senior') {
+            setProfileError(t('profile_invalid_level'));
             return;
         }
 
@@ -135,7 +221,11 @@ export const Dashboard = () => {
                 body: JSON.stringify({
                     name,
                     professional_title: professionalTitle,
-                    professional_description: professionalDescription
+                    professional_description: professionalDescription,
+                    rate,
+                    hours_per_day: hoursPerDay,
+                    days_per_week: daysPerWeek,
+                    level: level || null
                 }),
             });
 
@@ -166,7 +256,14 @@ export const Dashboard = () => {
                 name: typeof nextUser.name === 'string' ? nextUser.name : name,
                 professional_title: typeof nextUser.professional_title === 'string' ? nextUser.professional_title : professionalTitle,
                 professional_description:
-                    typeof nextUser.professional_description === 'string' ? nextUser.professional_description : professionalDescription
+                    typeof nextUser.professional_description === 'string' ? nextUser.professional_description : professionalDescription,
+                rate: typeof nextUser.rate === 'string' || typeof nextUser.rate === 'number' ? String(nextUser.rate) : String(rate),
+                hours_per_day:
+                    typeof nextUser.hours_per_day === 'string' || typeof nextUser.hours_per_day === 'number'
+                        ? String(nextUser.hours_per_day)
+                        : String(hoursPerDay),
+                days_per_week: typeof nextUser.days_per_week === 'number' ? nextUser.days_per_week : daysPerWeek,
+                level: typeof nextUser.level === 'string' ? nextUser.level : (level || null)
             });
 
             setShowProfileModal(false);
@@ -183,16 +280,29 @@ export const Dashboard = () => {
                 <div
                     style={{
                         position: 'fixed',
-                        inset: 0,
+                        top: '78px',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
                         background: 'rgba(0,0,0,0.65)',
                         display: 'flex',
-                        alignItems: 'center',
+                        alignItems: 'flex-start',
                         justifyContent: 'center',
                         padding: '24px',
+                        overflowY: 'auto',
                         zIndex: 9999
                     }}
                 >
-                    <div className="contact-form-wrapper" style={{ width: '100%', maxWidth: '560px', margin: 0 }}>
+                    <div
+                        className="contact-form-wrapper"
+                        style={{
+                            width: '100%',
+                            maxWidth: '560px',
+                            margin: 0,
+                            maxHeight: 'calc(100vh - 78px - 48px)',
+                            overflowY: 'auto'
+                        }}
+                    >
                         <form className="contact-form" onSubmit={handleProfileSubmit} style={{ padding: '24px' }}>
                             <h3 style={{ color: 'var(--text-primary)', marginBottom: '12px' }}>{t('profile_complete_title')}</h3>
                             <div style={{ color: 'var(--text-primary)', opacity: 0.9, marginBottom: '16px' }}>
@@ -235,6 +345,59 @@ export const Dashboard = () => {
                                     onChange={handleProfileChange}
                                     rows={4}
                                 />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="rate">{t('profile_rate_label')}</label>
+                                <input
+                                    type="number"
+                                    id="rate"
+                                    placeholder={t('profile_rate_placeholder')}
+                                    required
+                                    value={profileForm.rate}
+                                    onChange={handleProfileChange}
+                                    min="0"
+                                    step="0.01"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="hours_per_day">{t('profile_hours_per_day_label')}</label>
+                                <input
+                                    type="number"
+                                    id="hours_per_day"
+                                    placeholder={t('profile_hours_per_day_placeholder')}
+                                    required
+                                    value={profileForm.hours_per_day}
+                                    onChange={handleProfileChange}
+                                    min="0"
+                                    step="0.25"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="days_per_week">{t('profile_days_per_week_label')}</label>
+                                <input
+                                    type="number"
+                                    id="days_per_week"
+                                    placeholder={t('profile_days_per_week_placeholder')}
+                                    required
+                                    value={profileForm.days_per_week}
+                                    onChange={handleProfileChange}
+                                    min="1"
+                                    max="7"
+                                    step="1"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="level">{t('profile_level_label')}</label>
+                                <select id="level" value={profileForm.level} onChange={handleProfileChange}>
+                                    <option value="">{t('profile_level_empty')}</option>
+                                    <option value="junior">{t('profile_level_junior')}</option>
+                                    <option value="pleno">{t('profile_level_pleno')}</option>
+                                    <option value="senior">{t('profile_level_senior')}</option>
+                                </select>
                             </div>
 
                             <button type="submit" className="btn-primary btn-submit" disabled={profileSaving}>
