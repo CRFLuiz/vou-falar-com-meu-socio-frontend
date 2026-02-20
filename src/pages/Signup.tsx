@@ -14,6 +14,20 @@ export const Signup = () => {
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
 
+    const apiBaseUrl = (() => {
+        const configured = import.meta.env.VITE_API_URL;
+        if (typeof configured === 'string' && configured.trim().length > 0) {
+            return configured.replace(/\/$/, '');
+        }
+
+        const { protocol, hostname, host } = window.location;
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return '/api';
+        }
+
+        return `${protocol}//api.${host}`;
+    })();
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({
             ...formData,
@@ -28,7 +42,7 @@ export const Signup = () => {
         setLoading(true);
 
         try {
-            const response = await fetch('/api/auth/signup', {
+            const response = await fetch(`${apiBaseUrl}/auth/signup`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

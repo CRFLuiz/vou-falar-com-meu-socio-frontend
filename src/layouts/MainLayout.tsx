@@ -4,6 +4,7 @@ import { BackgroundEffects } from '../components/BackgroundEffects';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { useLocation } from 'react-router-dom';
+import { SideMenu } from '../components/SideMenu';
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -11,6 +12,22 @@ interface MainLayoutProps {
 
 export const MainLayout = ({ children }: MainLayoutProps) => {
     const location = useLocation();
+
+    const isAuthenticated = (() => {
+        try {
+            return Boolean(localStorage.getItem('vfcs_auth_user'));
+        } catch {
+            return false;
+        }
+    })();
+
+    const isAppArea =
+        location.pathname.startsWith('/dashboard') ||
+        location.pathname.startsWith('/profile') ||
+        location.pathname.startsWith('/project') ||
+        location.pathname.startsWith('/settings');
+
+    const showSideMenu = isAuthenticated && isAppArea;
 
     useEffect(() => {
         // Scroll animations
@@ -38,12 +55,13 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
     }, [location.pathname, children]); // Re-run when location changes or children update
 
     return (
-        <div id="top">
+        <div id="top" className={showSideMenu ? 'with-side-menu' : undefined}>
             <BackgroundEffects />
             <Navbar />
-            <main>
-                {children}
-            </main>
+            <div className="app-shell">
+                {showSideMenu && <SideMenu />}
+                <main className="app-main">{children}</main>
+            </div>
             <Footer />
         </div>
     );
