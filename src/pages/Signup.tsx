@@ -50,16 +50,30 @@ export const Signup = () => {
                 body: JSON.stringify(formData),
             });
 
-            const data = await response.json();
+            const data: unknown = await response.json().catch(() => null);
 
             if (!response.ok) {
-                throw new Error(data.message || 'Signup failed');
+                const message =
+                    data && typeof data === 'object' && 'message' in data && typeof (data as { message?: unknown }).message === 'string'
+                        ? (data as { message: string }).message
+                        : t('signup_error');
+                throw new Error(message === 'Invalid email format' ? t('invalid_email') : message);
+            }
+
+            try {
+                if (data && typeof data === 'object' && 'user' in data) {
+                    localStorage.setItem('vfcs_auth_user', JSON.stringify((data as { user: unknown }).user));
+                } else {
+                    localStorage.setItem('vfcs_auth_user', JSON.stringify({ email: formData.email }));
+                }
+            } catch {
+                localStorage.setItem('vfcs_auth_user', JSON.stringify({ email: formData.email }));
             }
 
             setSuccess(t('signup_success'));
             setTimeout(() => {
-                navigate('/login');
-            }, 2000);
+                navigate('/dashboard');
+            }, 800);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : t('signup_error');
             setError(message);

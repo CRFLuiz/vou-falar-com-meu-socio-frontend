@@ -57,7 +57,7 @@ export const Login = () => {
                     data && typeof data === 'object' && 'message' in data && typeof (data as { message?: unknown }).message === 'string'
                         ? (data as { message: string }).message
                         : t('login_error');
-                throw new Error(message);
+                throw new Error(message === 'Invalid email format' ? t('invalid_email') : message);
             }
 
             try {
