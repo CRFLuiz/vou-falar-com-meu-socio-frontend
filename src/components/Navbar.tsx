@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 export const Navbar = () => {
     const { t, i18n } = useTranslation();
+    const location = useLocation();
+    const navigate = useNavigate();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
     const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
+    const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -19,6 +22,22 @@ export const Navbar = () => {
 
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    useEffect(() => {
+        setIsLangDropdownOpen(false);
+        setIsUserDropdownOpen(false);
+        setIsMobileMenuOpen(false);
+    }, [location.pathname]);
+
+    useEffect(() => {
+        const handleClickOutside = () => {
+            setIsLangDropdownOpen(false);
+            setIsUserDropdownOpen(false);
+        };
+
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
     }, []);
 
     const toggleMobileMenu = () => {
@@ -37,6 +56,31 @@ export const Navbar = () => {
     ];
 
     const currentLang = languages.find(l => l.code === i18n.language) || languages[0];
+    const isAuthenticated = (() => {
+        try {
+            return Boolean(localStorage.getItem('vfcs_auth_user'));
+        } catch {
+            return false;
+        }
+    })();
+
+    const isDashboardArea =
+        location.pathname.startsWith('/dashboard') ||
+        location.pathname.startsWith('/profile') ||
+        location.pathname.startsWith('/project') ||
+        location.pathname.startsWith('/settings');
+    const showUserMenu = isAuthenticated && isDashboardArea;
+    const showAuthButtons = !showUserMenu;
+
+    const logout = () => {
+        try {
+            localStorage.removeItem('vfcs_auth_user');
+        } finally {
+            setIsUserDropdownOpen(false);
+            setIsMobileMenuOpen(false);
+            navigate('/login');
+        }
+    };
 
     return (
         <>
@@ -49,7 +93,11 @@ export const Navbar = () => {
                     <div className="nav-bottom" style={{ display: 'flex', gap: '10px', marginLeft: 'auto', alignItems: 'center' }}>
                          <div className="language-selector" style={{ position: 'relative', marginRight: '15px' }}>
                             <button 
-                                onClick={() => setIsLangDropdownOpen(!isLangDropdownOpen)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsLangDropdownOpen(!isLangDropdownOpen);
+                                    setIsUserDropdownOpen(false);
+                                }}
                                 style={{
                                     background: 'transparent',
                                     color: 'var(--primary-cyan)',
@@ -123,13 +171,105 @@ export const Navbar = () => {
                                 </div>
                             )}
                          </div>
-                         <Link to="/login" className="cyber-button">{t('login')}</Link>
-                         <Link to="/signup" className="cyber-button" style={{ background: 'transparent', border: '1px solid var(--primary-cyan)', color: 'var(--primary-cyan)' }}>{t('signup')}</Link>
+
+                         {showAuthButtons && (
+                            <>
+                                <Link to="/login" className="cyber-button">{t('login')}</Link>
+                                <Link to="/signup" className="cyber-button" style={{ background: 'transparent', border: '1px solid var(--primary-cyan)', color: 'var(--primary-cyan)' }}>{t('signup')}</Link>
+                            </>
+                         )}
+
+                         {showUserMenu && (
+                            <div style={{ position: 'relative' }}>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsUserDropdownOpen(!isUserDropdownOpen);
+                                        setIsLangDropdownOpen(false);
+                                    }}
+                                    style={{
+                                        background: 'transparent',
+                                        color: 'var(--primary-cyan)',
+                                        border: '1px solid var(--primary-cyan)',
+                                        width: '48px',
+                                        height: '48px',
+                                        borderRadius: '50%',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                    aria-label={t('profile')}
+                                >
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <path
+                                            d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5Z"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                        />
+                                        <path
+                                            d="M20 21a8 8 0 1 0-16 0"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                        />
+                                    </svg>
+                                </button>
+
+                                {isUserDropdownOpen && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: 'calc(100% + 8px)',
+                                        right: 0,
+                                        minWidth: '180px',
+                                        background: 'rgba(15, 15, 35, 0.98)',
+                                        border: '1px solid var(--primary-cyan)',
+                                        borderRadius: '8px',
+                                        zIndex: 1000,
+                                        overflow: 'hidden',
+                                        boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
+                                    }}>
+                                        <Link
+                                            to="/profile"
+                                            style={{
+                                                display: 'block',
+                                                padding: '12px 16px',
+                                                color: 'var(--primary-cyan)',
+                                                textDecoration: 'none',
+                                                fontSize: '1.1rem'
+                                            }}
+                                        >
+                                            {t('profile')}
+                                        </Link>
+                                        <button
+                                            onClick={logout}
+                                            style={{
+                                                width: '100%',
+                                                textAlign: 'left',
+                                                padding: '12px 16px',
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: 'var(--primary-cyan)',
+                                                cursor: 'pointer',
+                                                fontSize: '1.1rem'
+                                            }}
+                                        >
+                                            {t('logout')}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                         )}
                     </div>
                     <button 
                         className={`mobile-menu-button ${isMobileMenuOpen ? 'active' : ''}`} 
                         id="mobileMenuBtn"
-                        onClick={toggleMobileMenu}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            toggleMobileMenu();
+                            setIsLangDropdownOpen(false);
+                            setIsUserDropdownOpen(false);
+                        }}
                     >
                         <div className="hamburger">
                             <span></span>
@@ -148,8 +288,24 @@ export const Navbar = () => {
                     <button className="mobile-menu-close" id="mobileMenuClose" onClick={() => setIsMobileMenuOpen(false)}>✕</button>
                 </div>
                 <div className="mobile-menu-cta">
-                    <Link to="/login" className="cyber-button">Login</Link>
-                    <Link to="/signup" className="cyber-button" style={{ marginTop: '10px', background: 'transparent', border: '1px solid var(--primary-cyan)', color: 'var(--primary-cyan)' }}>Sign Up</Link>
+                    {showAuthButtons && (
+                        <>
+                            <Link to="/login" className="cyber-button">{t('login')}</Link>
+                            <Link to="/signup" className="cyber-button" style={{ marginTop: '10px', background: 'transparent', border: '1px solid var(--primary-cyan)', color: 'var(--primary-cyan)' }}>{t('signup')}</Link>
+                        </>
+                    )}
+                    {showUserMenu && (
+                        <>
+                            <Link to="/profile" className="cyber-button">{t('profile')}</Link>
+                            <button
+                                onClick={logout}
+                                className="cyber-button"
+                                style={{ marginTop: '10px', background: 'transparent', border: '1px solid var(--primary-cyan)', color: 'var(--primary-cyan)' }}
+                            >
+                                {t('logout')}
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         </>

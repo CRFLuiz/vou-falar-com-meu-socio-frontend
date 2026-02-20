@@ -12,6 +12,13 @@ export default defineConfig({
       'localhost', 
       '127.0.0.1',
       'vou-falar-com-meu-socio.lcdev.click'
-    ] 
+    ],
+    proxy: {
+      '/api': {
+        target: 'http://backend:3000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      }
+    }
   }
 })
