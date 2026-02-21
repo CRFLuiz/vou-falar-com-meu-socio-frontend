@@ -342,6 +342,7 @@ https://templatemo.com/tm-594-nexus-flow
 
         .with-side-menu .app-main {
             margin-left: 260px;
+            width: calc(100% - 260px);
         }
 
         .side-menu {

@@ -112,7 +112,7 @@ export const BackgroundEffects = () => {
     };
 
     // Random cyber text effects
-    const cyberTexts = ['CONNECTING...', 'NEURAL LINK ESTABLISHED', 'QUANTUM SYNC ACTIVE', 'REALITY MATRIX LOADED'];
+    const cyberTexts = ['CONNECTING...', 'LCDev.click', 'NEURAL LINK ESTABLISHED', 'QUANTUM SYNC ACTIVE', 'REALITY MATRIX LOADED'];
     const textInterval = setInterval(() => {
         const randomText = cyberTexts[Math.floor(Math.random() * cyberTexts.length)];
         const tempElement = document.createElement('div');
