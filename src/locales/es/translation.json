@@ -40,6 +40,8 @@
     "dashboard_welcome": "Bienvenido a tu panel.",
     "dashboard_welcome_with_email": "Bienvenido a tu panel, {{email}}.",
     "profile": "Perfil",
+    "user_profile": "Mi perfil",
+    "close": "Cerrar",
     "logout": "Salir",
     "project": "Proyecto",
     "settings": "Configuración",
@@ -82,6 +84,7 @@
     "profile_invalid_days_per_week": "Ingresa días por semana válidos (1 a 7).",
     "profile_invalid_level": "Selecciona un nivel válido.",
     "profile_save_error": "No se pudo guardar tu perfil.",
+    "profile_save_success": "Perfil guardado con éxito.",
     "profile_missing_user_id": "No se pudo identificar tu usuario. Inicia sesión nuevamente."
   }
 }

@@ -1,6 +1,6 @@
 import { MainLayout } from '../layouts/MainLayout';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export const Dashboard = () => {
     const { t, i18n } = useTranslation();
@@ -42,12 +42,17 @@ export const Dashboard = () => {
     });
 
     const [profileError, setProfileError] = useState('');
+    const [profileSuccess, setProfileSuccess] = useState('');
+    const [isProfileSuccessVisible, setIsProfileSuccessVisible] = useState(false);
+    const [isProfileSuccessFading, setIsProfileSuccessFading] = useState(false);
     const [profileSaving, setProfileSaving] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [profileAiHelping, setProfileAiHelping] = useState(false);
     const [profileAiError, setProfileAiError] = useState('');
     const [previousProfessionalTitle, setPreviousProfessionalTitle] = useState<string | null>(null);
     const [previousProfessionalDescription, setPreviousProfessionalDescription] = useState<string | null>(null);
+    const profileSuccessAutoCloseTimeoutRef = useRef<number | null>(null);
+    const profileSuccessFadeTimeoutRef = useRef<number | null>(null);
 
     useEffect(() => {
         const readAuthUser = () => {
@@ -138,18 +143,81 @@ export const Dashboard = () => {
         setShowProfileModal(Boolean(nextAuthUser && !isProfileComplete));
     }, []);
 
+    useEffect(() => {
+        return () => {
+            if (profileSuccessAutoCloseTimeoutRef.current !== null) {
+                window.clearTimeout(profileSuccessAutoCloseTimeoutRef.current);
+                profileSuccessAutoCloseTimeoutRef.current = null;
+            }
+            if (profileSuccessFadeTimeoutRef.current !== null) {
+                window.clearTimeout(profileSuccessFadeTimeoutRef.current);
+                profileSuccessFadeTimeoutRef.current = null;
+            }
+        };
+    }, []);
+
     const email = authUser?.email ?? null;
 
     const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        setProfileSuccess('');
+        setIsProfileSuccessVisible(false);
+        setIsProfileSuccessFading(false);
         setProfileForm((prev) => ({
             ...prev,
             [e.target.id]: e.target.value
         }));
     };
 
+    const startProfileSuccessFade = () => {
+        if (profileSuccessFadeTimeoutRef.current !== null) {
+            window.clearTimeout(profileSuccessFadeTimeoutRef.current);
+            profileSuccessFadeTimeoutRef.current = null;
+        }
+
+        setIsProfileSuccessFading(true);
+        profileSuccessFadeTimeoutRef.current = window.setTimeout(() => {
+            setIsProfileSuccessVisible(false);
+            setIsProfileSuccessFading(false);
+            setProfileSuccess('');
+            profileSuccessFadeTimeoutRef.current = null;
+        }, 350);
+    };
+
+    const showProfileSuccess = (message: string) => {
+        if (profileSuccessAutoCloseTimeoutRef.current !== null) {
+            window.clearTimeout(profileSuccessAutoCloseTimeoutRef.current);
+            profileSuccessAutoCloseTimeoutRef.current = null;
+        }
+        if (profileSuccessFadeTimeoutRef.current !== null) {
+            window.clearTimeout(profileSuccessFadeTimeoutRef.current);
+            profileSuccessFadeTimeoutRef.current = null;
+        }
+
+        setProfileSuccess(message);
+        setIsProfileSuccessVisible(true);
+        setIsProfileSuccessFading(false);
+
+        profileSuccessAutoCloseTimeoutRef.current = window.setTimeout(() => {
+            startProfileSuccessFade();
+            profileSuccessAutoCloseTimeoutRef.current = null;
+        }, 3000);
+    };
+
     const handleProfileSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setProfileError('');
+        setProfileSuccess('');
+        setIsProfileSuccessVisible(false);
+        setIsProfileSuccessFading(false);
+
+        if (profileSuccessAutoCloseTimeoutRef.current !== null) {
+            window.clearTimeout(profileSuccessAutoCloseTimeoutRef.current);
+            profileSuccessAutoCloseTimeoutRef.current = null;
+        }
+        if (profileSuccessFadeTimeoutRef.current !== null) {
+            window.clearTimeout(profileSuccessFadeTimeoutRef.current);
+            profileSuccessFadeTimeoutRef.current = null;
+        }
 
         if (!authUser?.id) {
             setProfileError(t('profile_missing_user_id'));
@@ -273,6 +341,8 @@ export const Dashboard = () => {
                 level: typeof nextUser.level === 'string' ? nextUser.level : (level || null)
             });
 
+            showProfileSuccess(t('profile_save_success'));
+
             setShowProfileModal(false);
         } catch (err: unknown) {
             setProfileError(err instanceof Error ? err.message : t('profile_save_error'));
@@ -370,6 +440,62 @@ export const Dashboard = () => {
 
     return (
         <MainLayout>
+            {isProfileSuccessVisible && (
+                <div
+                    role="status"
+                    aria-live="polite"
+                    style={{
+                        position: 'fixed',
+                        top: '96px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: 'min(720px, calc(100% - 24px))',
+                        background: 'rgba(15, 15, 35, 0.98)',
+                        border: '1px solid rgba(34, 197, 94, 0.9)',
+                        boxShadow: '0 8px 30px rgba(0,0,0,0.55)',
+                        borderRadius: '10px',
+                        padding: '16px 16px',
+                        zIndex: 10000,
+                        opacity: isProfileSuccessFading ? 0 : 1,
+                        transition: 'opacity 300ms ease',
+                        color: 'var(--text-primary)',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
+                        <div style={{ fontSize: '1.05rem', fontWeight: 600, lineHeight: 1.25 }}>
+                            {profileSuccess}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (profileSuccessAutoCloseTimeoutRef.current !== null) {
+                                    window.clearTimeout(profileSuccessAutoCloseTimeoutRef.current);
+                                    profileSuccessAutoCloseTimeoutRef.current = null;
+                                }
+                                startProfileSuccessFade();
+                            }}
+                            aria-label={t('close')}
+                            style={{
+                                background: 'transparent',
+                                border: '1px solid rgba(34, 197, 94, 0.9)',
+                                color: 'rgba(34, 197, 94, 0.95)',
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '18px',
+                                lineHeight: 1,
+                                flex: '0 0 auto',
+                            }}
+                        >
+                            ×
+                        </button>
+                    </div>
+                </div>
+            )}
             {showProfileModal && (
                 <div
                     style={{

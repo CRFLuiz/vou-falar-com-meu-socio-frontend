@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import brazilFlag from '../assets/images/brazil.png';
-import spainFlag from '../assets/images/spain.png';
-import usaFlag from '../assets/images/usa.png';
+import brazilFlag from '../assets/images/brazil-100.svg';
+import spainFlag from '../assets/images/spain-100.svg';
+import usaFlag from '../assets/images/usa-100.svg';
 
 export const Navbar = () => {
     const { t, i18n } = useTranslation();
@@ -122,6 +122,8 @@ export const Navbar = () => {
                                         src={currentLang.flagSrc}
                                         alt=""
                                         aria-hidden="true"
+                                        loading="eager"
+                                        fetchPriority="high"
                                         style={{
                                             width: '18px',
                                             height: '18px',
@@ -171,6 +173,8 @@ export const Navbar = () => {
                                                 src={lang.flagSrc}
                                                 alt=""
                                                 aria-hidden="true"
+                                                loading="eager"
+                                                fetchPriority="high"
                                                 style={{
                                                     width: '18px',
                                                     height: '18px',
