@@ -57,6 +57,8 @@
     "profile_professional_title_placeholder": "E.g. Software Engineer",
     "profile_professional_description_label": "Professional description",
     "profile_professional_description_placeholder": "Tell us a bit about your experience...",
+    "profile_help_with_required": "help with required",
+    "profile_help_loading": "Loading help...",
     "profile_rate_label": "Rate (per day)",
     "profile_rate_placeholder": "E.g. 250",
     "profile_hours_per_day_label": "Hours per day",

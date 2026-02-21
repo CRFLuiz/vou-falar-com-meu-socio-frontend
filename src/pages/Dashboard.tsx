@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useState } from 'react';
 
 export const Dashboard = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
 
     const apiBaseUrl = useMemo(() => {
         const configured = import.meta.env.VITE_API_URL;
@@ -44,6 +44,10 @@ export const Dashboard = () => {
     const [profileError, setProfileError] = useState('');
     const [profileSaving, setProfileSaving] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
+    const [profileAiHelping, setProfileAiHelping] = useState(false);
+    const [profileAiError, setProfileAiError] = useState('');
+    const [previousProfessionalTitle, setPreviousProfessionalTitle] = useState<string | null>(null);
+    const [previousProfessionalDescription, setPreviousProfessionalDescription] = useState<string | null>(null);
 
     useEffect(() => {
         const readAuthUser = () => {
@@ -277,6 +281,93 @@ export const Dashboard = () => {
         }
     };
 
+    const handleProfileAiHelp = async () => {
+        setProfileAiError('');
+
+        const name = profileForm.name.trim();
+        const professionalTitle = profileForm.professional_title.trim();
+        const professionalDescription = profileForm.professional_description.trim();
+
+        if (!name) {
+            setProfileAiError(t('profile_required_fields'));
+            return;
+        }
+
+        if (!professionalTitle && !professionalDescription) {
+            return;
+        }
+
+        setPreviousProfessionalTitle(profileForm.professional_title);
+        setPreviousProfessionalDescription(profileForm.professional_description);
+        setProfileAiHelping(true);
+
+        try {
+            const language = (i18n.resolvedLanguage || i18n.language || 'en').split('-')[0];
+            const response = await fetch(`${apiBaseUrl}/ai/profile/help-required`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name,
+                    professional_title: professionalTitle,
+                    professional_description: professionalDescription,
+                    language,
+                }),
+            });
+
+            const data: unknown = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                const message =
+                    data && typeof data === 'object' && 'message' in data && typeof (data as { message?: unknown }).message === 'string'
+                        ? (data as { message: string }).message
+                        : t('profile_save_error');
+                throw new Error(message);
+            }
+
+            const nextTitle =
+                data && typeof data === 'object' && 'professional_title' in data && typeof (data as { professional_title?: unknown }).professional_title === 'string'
+                    ? (data as { professional_title: string }).professional_title
+                    : null;
+            const nextDescription =
+                data &&
+                typeof data === 'object' &&
+                'professional_description' in data &&
+                typeof (data as { professional_description?: unknown }).professional_description === 'string'
+                    ? (data as { professional_description: string }).professional_description
+                    : null;
+
+            setProfileForm((prev) => ({
+                ...prev,
+                professional_title: typeof nextTitle === 'string' ? nextTitle : prev.professional_title,
+                professional_description: typeof nextDescription === 'string' ? nextDescription : prev.professional_description,
+            }));
+        } catch (err: unknown) {
+            setProfileAiError(err instanceof Error ? err.message : t('profile_save_error'));
+        } finally {
+            setProfileAiHelping(false);
+        }
+    };
+
+    const handleRevertProfessionalTitle = () => {
+        if (previousProfessionalTitle === null) return;
+        setProfileForm((prev) => ({
+            ...prev,
+            professional_title: previousProfessionalTitle,
+        }));
+        setPreviousProfessionalTitle(null);
+    };
+
+    const handleRevertProfessionalDescription = () => {
+        if (previousProfessionalDescription === null) return;
+        setProfileForm((prev) => ({
+            ...prev,
+            professional_description: previousProfessionalDescription,
+        }));
+        setPreviousProfessionalDescription(null);
+    };
+
     return (
         <MainLayout>
             {showProfileModal && (
@@ -313,6 +404,7 @@ export const Dashboard = () => {
                             </div>
 
                             {profileError && <div style={{ color: 'red', marginBottom: '10px' }}>{profileError}</div>}
+                            {profileAiError && <div style={{ color: 'red', marginBottom: '10px' }}>{profileAiError}</div>}
 
                             <div style={{ color: 'var(--primary-cyan)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
                                 {t('profile_required_section')}
@@ -333,31 +425,208 @@ export const Dashboard = () => {
                             </div>
 
                             <div className="form-group">
-                                <label htmlFor="professional_title">
-                                    {t('profile_professional_title_label')} <span>{t('profile_required_indicator')}</span>
+                                <label htmlFor="professional_title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                                    <span>
+                                        {t('profile_professional_title_label')} <span>{t('profile_required_indicator')}</span>
+                                    </span>
+                                    {previousProfessionalTitle !== null && (
+                                        <button
+                                            type="button"
+                                            onClick={handleRevertProfessionalTitle}
+                                            disabled={profileAiHelping}
+                                            style={{
+                                                background: 'transparent',
+                                                border: '1px solid var(--primary-cyan)',
+                                                color: 'var(--primary-cyan)',
+                                                padding: '6px 10px',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                            aria-label="Revert title suggestion"
+                                        >
+                                            <svg
+                                                width="16"
+                                                height="16"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                aria-hidden="true"
+                                            >
+                                                <path
+                                                    d="M9 14l-4-4 4-4"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                                <path
+                                                    d="M20 20a8 8 0 0 0-8-8H5"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </svg>
+                                        </button>
+                                    )}
                                 </label>
-                                <input
-                                    type="text"
-                                    id="professional_title"
-                                    placeholder={t('profile_professional_title_placeholder')}
-                                    required
-                                    value={profileForm.professional_title}
-                                    onChange={handleProfileChange}
-                                />
+                                <div className="vfcs-field-overlay-container" aria-busy={profileAiHelping}>
+                                    <input
+                                        type="text"
+                                        id="professional_title"
+                                        placeholder={t('profile_professional_title_placeholder')}
+                                        required
+                                        value={profileForm.professional_title}
+                                        onChange={handleProfileChange}
+                                        disabled={profileAiHelping}
+                                    />
+                                    {profileAiHelping && (
+                                        <div className="vfcs-field-overlay" aria-hidden="true">
+                                            <span className="vfcs-inline-spinner" aria-hidden="true" />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="form-group">
-                                <label htmlFor="professional_description">
-                                    {t('profile_professional_description_label')} <span>{t('profile_required_indicator')}</span>
+                                <label
+                                    htmlFor="professional_description"
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}
+                                >
+                                    <span>
+                                        {t('profile_professional_description_label')} <span>{t('profile_required_indicator')}</span>
+                                    </span>
+                                    {previousProfessionalDescription !== null && (
+                                        <button
+                                            type="button"
+                                            onClick={handleRevertProfessionalDescription}
+                                            disabled={profileAiHelping}
+                                            style={{
+                                                background: 'transparent',
+                                                border: '1px solid var(--primary-cyan)',
+                                                color: 'var(--primary-cyan)',
+                                                padding: '6px 10px',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                            aria-label="Revert description suggestion"
+                                        >
+                                            <svg
+                                                width="16"
+                                                height="16"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                aria-hidden="true"
+                                            >
+                                                <path
+                                                    d="M9 14l-4-4 4-4"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                                <path
+                                                    d="M20 20a8 8 0 0 0-8-8H5"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </svg>
+                                        </button>
+                                    )}
                                 </label>
-                                <textarea
-                                    id="professional_description"
-                                    placeholder={t('profile_professional_description_placeholder')}
-                                    required
-                                    value={profileForm.professional_description}
-                                    onChange={handleProfileChange}
-                                    rows={4}
-                                />
+                                <div className="vfcs-field-overlay-container" aria-busy={profileAiHelping}>
+                                    <textarea
+                                        id="professional_description"
+                                        placeholder={t('profile_professional_description_placeholder')}
+                                        required
+                                        value={profileForm.professional_description}
+                                        onChange={handleProfileChange}
+                                        rows={4}
+                                        disabled={profileAiHelping}
+                                    />
+                                    {profileAiHelping && (
+                                        <div className="vfcs-field-overlay" aria-hidden="true">
+                                            <span className="vfcs-inline-spinner" aria-hidden="true" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div style={{ marginTop: '12px' }}>
+                                    <button
+                                        type="button"
+                                        className="btn-secondary"
+                                        onClick={handleProfileAiHelp}
+                                        disabled={
+                                            profileAiHelping ||
+                                            profileSaving ||
+                                            profileForm.name.trim().length === 0 ||
+                                            (profileForm.professional_title.trim().length === 0 && profileForm.professional_description.trim().length === 0)
+                                        }
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.9rem 1.2rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '10px',
+                                            letterSpacing: '1px',
+                                            textTransform: 'none',
+                                            opacity:
+                                                profileAiHelping ||
+                                                profileSaving ||
+                                                profileForm.name.trim().length === 0 ||
+                                                (profileForm.professional_title.trim().length === 0 && profileForm.professional_description.trim().length === 0)
+                                                    ? 0.6
+                                                    : 1,
+                                            cursor:
+                                                profileAiHelping ||
+                                                profileSaving ||
+                                                profileForm.name.trim().length === 0 ||
+                                                (profileForm.professional_title.trim().length === 0 && profileForm.professional_description.trim().length === 0)
+                                                    ? 'not-allowed'
+                                                    : 'pointer'
+                                        }}
+                                    >
+                                        {profileAiHelping ? (
+                                            <span className="vfcs-inline-spinner" aria-hidden="true" />
+                                        ) : (
+                                            <svg
+                                                width="18"
+                                                height="18"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                aria-hidden="true"
+                                            >
+                                                <path
+                                                    d="M12 2l1.2 4.1L17 7l-3.8 1L12 12l-1.2-4L7 7l3.8-.9L12 2Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.8"
+                                                    strokeLinejoin="round"
+                                                />
+                                                <path
+                                                    d="M19 12l.8 2.7L22 15l-2.2.7L19 18l-.8-2.3L16 15l2.2-.3L19 12Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.8"
+                                                    strokeLinejoin="round"
+                                                />
+                                                <path
+                                                    d="M5 13l.8 2.7L8 16l-2.2.7L5 19l-.8-2.3L2 16l2.2-.3L5 13Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.8"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </svg>
+                                        )}
+                                        <span>{profileAiHelping ? t('profile_help_loading') : t('profile_help_with_required')}</span>
+                                    </button>
+                                </div>
                             </div>
 
                             <div style={{ color: 'var(--primary-cyan)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>

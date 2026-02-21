@@ -15,3 +15,9 @@
 ## Login
 `src/pages/Login.tsx`
 - User authentication page (implementation pending).
+
+## Dashboard
+`src/pages/Dashboard.tsx`
+- Main authenticated application page.
+- Includes profile completion modal when required fields are missing.
+- Supports AI assistance for required profile fields via the backend `/ai/profile/help-required` endpoint.

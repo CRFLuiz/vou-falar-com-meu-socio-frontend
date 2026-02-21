@@ -8,6 +8,7 @@
 - Displays the logo "Vou Falar Com Meu Sócio".
 - Includes links to Login and Signup pages.
 - Handles mobile menu toggling.
+- Includes a language selector dropdown with flag icons.
 
 ### Footer
 `src/components/Footer.tsx`
