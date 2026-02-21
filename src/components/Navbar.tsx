@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
+import brazilFlag from '../assets/images/brazil.png';
+import spainFlag from '../assets/images/spain.png';
+import usaFlag from '../assets/images/usa.png';
+
 export const Navbar = () => {
     const { t, i18n } = useTranslation();
     const location = useLocation();
@@ -50,12 +54,13 @@ export const Navbar = () => {
     };
 
     const languages = [
-        { code: 'en', label: 'English' },
-        { code: 'pt', label: 'Português' },
-        { code: 'es', label: 'Español' }
+        { code: 'en', label: 'English', flagSrc: usaFlag },
+        { code: 'pt', label: 'Português', flagSrc: brazilFlag },
+        { code: 'es', label: 'Español', flagSrc: spainFlag }
     ];
 
-    const currentLang = languages.find(l => l.code === i18n.language) || languages[0];
+    const activeLangCode = (i18n.resolvedLanguage || i18n.language || 'en').split('-')[0];
+    const currentLang = languages.find(l => l.code === activeLangCode) || languages[0];
     const isAuthenticated = (() => {
         try {
             return Boolean(localStorage.getItem('vfcs_auth_user'));
@@ -113,14 +118,19 @@ export const Navbar = () => {
                                 }}
                             >
                                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                                    <span style={{ 
-                                        width: '14px', 
-                                        height: '14px', 
-                                        backgroundColor: 'red', 
-                                        borderRadius: '50%', 
-                                        marginRight: '12px',
-                                        display: 'inline-block'
-                                    }}></span>
+                                    <img
+                                        src={currentLang.flagSrc}
+                                        alt=""
+                                        aria-hidden="true"
+                                        style={{
+                                            width: '18px',
+                                            height: '18px',
+                                            borderRadius: '50%',
+                                            marginRight: '12px',
+                                            display: 'inline-block',
+                                            objectFit: 'cover',
+                                        }}
+                                    />
                                     {currentLang.label}
                                 </div>
                                 <span style={{ fontSize: '0.8em', marginLeft: '8px' }}>▼</span>
@@ -151,20 +161,25 @@ export const Navbar = () => {
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 borderBottom: lang.code !== languages[languages.length - 1].code ? '1px solid rgba(0, 255, 255, 0.1)' : 'none',
-                                                background: i18n.language === lang.code ? 'rgba(0, 255, 255, 0.1)' : 'transparent',
+                                                background: activeLangCode === lang.code ? 'rgba(0, 255, 255, 0.1)' : 'transparent',
                                                 fontSize: '1.2rem'
                                             }}
                                             onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 255, 255, 0.2)'}
-                                            onMouseLeave={(e) => e.currentTarget.style.background = i18n.language === lang.code ? 'rgba(0, 255, 255, 0.1)' : 'transparent'}
+                                            onMouseLeave={(e) => e.currentTarget.style.background = activeLangCode === lang.code ? 'rgba(0, 255, 255, 0.1)' : 'transparent'}
                                         >
-                                            <span style={{ 
-                                                width: '14px', 
-                                                height: '14px', 
-                                                backgroundColor: 'red', 
-                                                borderRadius: '50%', 
-                                                marginRight: '12px',
-                                                display: 'inline-block'
-                                            }}></span>
+                                            <img
+                                                src={lang.flagSrc}
+                                                alt=""
+                                                aria-hidden="true"
+                                                style={{
+                                                    width: '18px',
+                                                    height: '18px',
+                                                    borderRadius: '50%',
+                                                    marginRight: '12px',
+                                                    display: 'inline-block',
+                                                    objectFit: 'cover',
+                                                }}
+                                            />
                                             {lang.label}
                                         </div>
                                     ))}
