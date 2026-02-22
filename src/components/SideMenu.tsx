@@ -23,7 +23,7 @@ export const SideMenu = () => {
                     <Link to="/profile" className={`side-menu-item ${isActive('/profile') ? 'active' : ''}`}>
                         {t('profile')}
                     </Link>
-                    <Link to="/project" className={`side-menu-item ${isActive('/project') ? 'active' : ''}`}>
+                    <Link to="/projects" className={`side-menu-item ${isActive('/projects') ? 'active' : ''}`}>
                         {t('project')}
                     </Link>
                 </div>

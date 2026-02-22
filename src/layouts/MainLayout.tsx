@@ -24,7 +24,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
     const isAppArea =
         location.pathname.startsWith('/dashboard') ||
         location.pathname.startsWith('/profile') ||
-        location.pathname.startsWith('/project') ||
+        location.pathname.startsWith('/projects') ||
         location.pathname.startsWith('/settings');
 
     const showSideMenu = isAuthenticated && isAppArea;

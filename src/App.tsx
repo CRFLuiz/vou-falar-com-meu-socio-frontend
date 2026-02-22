@@ -5,7 +5,8 @@ import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { Dashboard } from './pages/Dashboard';
 import { Profile } from './pages/Profile';
-import { Project } from './pages/Project';
+import { Projects } from './pages/Projects';
+import { ProjectDetails } from './pages/ProjectDetails';
 import { Settings } from './pages/Settings';
 import type { ReactElement } from 'react';
 
@@ -49,10 +50,18 @@ function App() {
           }
         />
         <Route
-          path="/project"
+          path="/projects"
           element={
             <ProtectedRoute>
-              <Project />
+              <Projects />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/projects/:id"
+          element={
+            <ProtectedRoute>
+              <ProjectDetails />
             </ProtectedRoute>
           }
         />
