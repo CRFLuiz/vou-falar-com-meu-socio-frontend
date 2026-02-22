@@ -5,6 +5,81 @@ import { useNavigate } from 'react-router-dom';
 
 import type { Project } from '../types/project';
 
+const Tooltip = ({ text }: { text: string }) => {
+    const [isVisible, setIsVisible] = useState(false);
+
+    return (
+        <div 
+            onMouseEnter={() => setIsVisible(true)}
+            onMouseLeave={() => setIsVisible(false)}
+            style={{ 
+                position: 'relative', 
+                display: 'inline-flex', 
+                marginLeft: '8px', 
+                verticalAlign: 'middle',
+                cursor: 'help'
+            }}
+        >
+            <div style={{
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                border: '1px solid var(--text-secondary)',
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '10px',
+                fontWeight: 'bold'
+            }}>?</div>
+            
+            {isVisible && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    marginBottom: '8px',
+                    width: '220px',
+                    padding: '0.75rem',
+                    background: '#1a1a2e',
+                    border: '1px solid var(--primary-cyan)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '0.8rem',
+                    lineHeight: '1.4',
+                    zIndex: 100,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    pointerEvents: 'none',
+                    textAlign: 'center'
+                }}>
+                    {text}
+                    <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: '50%',
+                        marginLeft: '-6px',
+                        borderWidth: '6px',
+                        borderStyle: 'solid',
+                        borderColor: '#1a1a2e transparent transparent transparent'
+                    }}></div>
+                    <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: '50%',
+                        marginLeft: '-6px',
+                        marginTop: '-1px',
+                        borderWidth: '6px',
+                        borderStyle: 'solid',
+                        borderColor: 'var(--primary-cyan) transparent transparent transparent',
+                        zIndex: -1
+                    }}></div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const Projects = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
@@ -14,8 +89,9 @@ export const Projects = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     
     // New Project Form State
-    const [newProjectName, setNewProjectName] = useState('');
-    const [newProjectDescription, setNewProjectDescription] = useState('');
+    const [projectUrl, setProjectUrl] = useState('');
+    const [projectText, setProjectText] = useState('');
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
     
     const [isLoading, setIsLoading] = useState(false);
 
@@ -66,40 +142,46 @@ export const Projects = () => {
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
-        setNewProjectName('');
-        setNewProjectDescription('');
+        setProjectUrl('');
+        setProjectText('');
+        setToastMessage(null);
         setIsLoading(false);
     };
 
-    const handleCreateProject = async () => {
-        if (!newProjectName.trim()) return;
+    const handleImportProject = async () => {
+        if (!projectUrl.trim() && !projectText.trim()) {
+            setToastMessage(t('project_import_error_empty'));
+            // Auto hide after 3 seconds
+            setTimeout(() => setToastMessage(null), 3000);
+            return;
+        }
 
+        setToastMessage(null);
         setIsLoading(true);
         
         try {
-            const response = await fetch(`${apiBaseUrl}/projects`, {
+            const response = await fetch(`${apiBaseUrl}/projects/import`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ 
-                    name: newProjectName,
-                    description: newProjectDescription,
-                    status: 'pending'
+                    url: projectUrl,
+                    text: projectText
                 }),
             });
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || 'Failed to create project');
+                throw new Error(errorData.message || 'Failed to import project');
             }
 
             const newProject = await response.json();
             setProjects([newProject, ...projects]);
             handleCloseModal();
         } catch (error) {
-            console.error('Create project error:', error);
-            alert(error instanceof Error ? error.message : 'Failed to create project');
+            console.error('Import project error:', error);
+            alert(error instanceof Error ? error.message : 'Failed to import project');
         } finally {
             setIsLoading(false);
         }
@@ -280,6 +362,25 @@ export const Projects = () => {
                         boxShadow: '0 0 30px rgba(0, 255, 242, 0.15)',
                         position: 'relative'
                     }}>
+                        {toastMessage && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '-60px',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                background: 'rgba(255, 68, 68, 0.9)',
+                                color: 'white',
+                                padding: '0.75rem 1.5rem',
+                                borderRadius: '8px',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                                zIndex: 2000,
+                                whiteSpace: 'nowrap',
+                                backdropFilter: 'blur(4px)',
+                                border: '1px solid #ff4444'
+                            }}>
+                                ⚠️ {toastMessage}
+                            </div>
+                        )}
                         <button 
                             onClick={handleCloseModal}
                             style={{
@@ -317,13 +418,14 @@ export const Projects = () => {
                                 color: 'var(--text-secondary)',
                                 fontSize: '0.9rem' 
                             }}>
-                                Project Name
+                                {t('project_modal_url_label')}
+                                <Tooltip text={t('project_modal_url_tooltip')} />
                             </label>
                             <input
                                 type="text"
-                                value={newProjectName}
-                                onChange={(e) => setNewProjectName(e.target.value)}
-                                placeholder="Enter project name"
+                                value={projectUrl}
+                                onChange={(e) => setProjectUrl(e.target.value)}
+                                placeholder={t('project_modal_url_placeholder')}
                                 style={{
                                     width: '100%',
                                     padding: '0.75rem',
@@ -341,15 +443,16 @@ export const Projects = () => {
                             <label style={{ 
                                 display: 'block', 
                                 marginBottom: '0.5rem', 
-                                color: 'var(--text-secondary)',
+                                color: 'var(--text-secondary)', 
                                 fontSize: '0.9rem' 
                             }}>
-                                Scraping Content / Context
+                                {t('project_modal_text_label')}
+                                <Tooltip text={t('project_modal_text_tooltip')} />
                             </label>
                             <textarea
-                                value={newProjectDescription}
-                                onChange={(e) => setNewProjectDescription(e.target.value)}
-                                placeholder="Paste project description or raw requirements..."
+                                value={projectText}
+                                onChange={(e) => setProjectText(e.target.value)}
+                                placeholder={t('project_modal_text_placeholder')}
                                 rows={5}
                                 style={{
                                     width: '100%',
@@ -364,7 +467,7 @@ export const Projects = () => {
                                 }}
                             />
                             <div style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                                {newProjectDescription.length} characters
+                                {projectText.length} characters
                             </div>
                         </div>
 
@@ -382,11 +485,11 @@ export const Projects = () => {
                                     fontWeight: 'bold'
                                 }}
                             >
-                                Cancel
+                                {t('project_modal_cancel')}
                             </button>
                             <button
-                                onClick={handleCreateProject}
-                                disabled={isLoading || !newProjectName.trim()}
+                                onClick={handleImportProject}
+                                disabled={isLoading}
                                 style={{
                                     padding: '0.75rem 1.5rem',
                                     borderRadius: '6px',
@@ -395,10 +498,10 @@ export const Projects = () => {
                                     color: '#000',
                                     fontWeight: 'bold',
                                     cursor: 'pointer',
-                                    opacity: (isLoading || !newProjectName.trim()) ? 0.7 : 1
+                                    opacity: isLoading ? 0.7 : 1
                                 }}
                             >
-                                {isLoading ? 'Creating...' : 'Create Project'}
+                                {isLoading ? t('project_modal_loading') : t('project_modal_load')}
                             </button>
                         </div>
                     </div>

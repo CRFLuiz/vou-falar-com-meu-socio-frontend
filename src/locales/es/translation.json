@@ -58,6 +58,8 @@
     "project_modal_title": "Importar Proyecto",
     "project_modal_url_label": "URL del Proyecto",
     "project_modal_url_placeholder": "https://github.com/usuario/repo",
+    "project_modal_text_label": "Contexto / Descripción del Proyecto",
+    "project_modal_text_placeholder": "Pegue la descripción del proyecto, reglas o cualquier otro contexto...",
     "project_modal_cancel": "Cancelar",
     "project_modal_load": "Cargar Proyecto",
     "project_modal_loading": "Cargando...",
