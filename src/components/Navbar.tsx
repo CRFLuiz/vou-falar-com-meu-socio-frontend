@@ -72,7 +72,7 @@ export const Navbar = () => {
     const isDashboardArea =
         location.pathname.startsWith('/dashboard') ||
         location.pathname.startsWith('/profile') ||
-        location.pathname.startsWith('/project') ||
+        location.pathname.startsWith('/projects') ||
         location.pathname.startsWith('/settings');
     const showUserMenu = isAuthenticated && isDashboardArea;
     const showAuthButtons = !showUserMenu;
