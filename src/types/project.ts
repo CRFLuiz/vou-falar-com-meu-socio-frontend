@@ -90,7 +90,7 @@ export interface DocumentsData {
 }
 
 export interface Project {
-    id: number;
+    id: number | string;
     name: string;
     description: string;
     status: string;

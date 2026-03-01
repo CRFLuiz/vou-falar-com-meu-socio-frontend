@@ -6,3 +6,5 @@ Start here to explore specific frontend features and improvements.
 *   **[performance_optimization.md](./performance_optimization.md):** Details on the preview script updates to support Dockerized production builds.
 *   **[seo_improvements.md](./seo_improvements.md):** Documentation on SEO fixes including meta descriptions and robots.txt.
 *   **[project_import.md](./project_import.md):** Details on the "Import Project" modal, validation rules, and submission flow.
+*   **[profile_enhancement.md](./profile_enhancement.md):** Documentation for the AI-powered profile completion feature.
+*   **[project_details_structure.md](./project_details_structure.md):** Overview of the project details page structure and phases.

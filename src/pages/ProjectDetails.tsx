@@ -63,8 +63,16 @@ export const ProjectDetails = () => {
         if (!id) return;
         setIsLoading(true);
         try {
+            const userStr = localStorage.getItem('vfcs_auth_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const headers: Record<string, string> = {};
+            
+            if (user && user.id) {
+                headers['x-user-id'] = String(user.id);
+            }
+
             console.log('Fetching project from:', `${apiBaseUrl}/projects/${id}`);
-            const response = await fetch(`${apiBaseUrl}/projects/${id}`);
+            const response = await fetch(`${apiBaseUrl}/projects/${id}`, { headers });
             if (response.ok) {
                 const data = await response.json();
                 setProject(data);
@@ -83,9 +91,20 @@ export const ProjectDetails = () => {
         if (!project || !id) return;
         setIsGenerating(true);
         try {
+            const userStr = localStorage.getItem('vfcs_auth_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json'
+            };
+            
+            if (user && user.id) {
+                headers['x-user-id'] = String(user.id);
+            }
+
             console.log(`Generating ${stageName} via:`, `${apiBaseUrl}/projects/${id}/stage/${endpointSuffix}`);
             const response = await fetch(`${apiBaseUrl}/projects/${id}/stage/${endpointSuffix}`, {
                 method: 'POST',
+                headers,
             });
             if (response.ok) {
                 const updatedProject = await response.json();

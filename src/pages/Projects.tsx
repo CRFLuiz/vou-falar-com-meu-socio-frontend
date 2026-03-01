@@ -2,6 +2,7 @@ import { MainLayout } from '../layouts/MainLayout';
 import { useTranslation } from 'react-i18next';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DebugModal } from '../components/DebugModal';
 
 import type { Project } from '../types/project';
 
@@ -88,6 +89,10 @@ export const Projects = () => {
     const [sortBy, setSortBy] = useState<'name' | 'date'>('date');
     const [isModalOpen, setIsModalOpen] = useState(false);
     
+    // Debug Modal State
+    const [debugData, setDebugData] = useState<any>(null);
+    const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
+    
     // New Project Form State
     const [projectUrl, setProjectUrl] = useState('');
     const [projectText, setProjectText] = useState('');
@@ -118,7 +123,15 @@ export const Projects = () => {
 
     const fetchProjects = async () => {
         try {
-            const response = await fetch(`${apiBaseUrl}/projects`);
+            const userStr = localStorage.getItem('vfcs_auth_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const headers: Record<string, string> = {};
+            
+            if (user && user.id) {
+                headers['x-user-id'] = String(user.id);
+            }
+
+            const response = await fetch(`${apiBaseUrl}/projects`, { headers });
             if (response.ok) {
                 const data = await response.json();
                 setProjects(data);
@@ -160,11 +173,19 @@ export const Projects = () => {
         setIsLoading(true);
         
         try {
+            const userStr = localStorage.getItem('vfcs_auth_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            
+            if (user && user.id) {
+                headers['x-user-id'] = String(user.id);
+            }
+
             const response = await fetch(`${apiBaseUrl}/projects/import`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify({ 
                     url: projectUrl,
                     text: projectText
@@ -176,8 +197,16 @@ export const Projects = () => {
                 throw new Error(errorData.message || 'Failed to import project');
             }
 
-            const newProject = await response.json();
-            setProjects([newProject, ...projects]);
+            const result = await response.json();
+            
+            // Check for debug data if enabled
+            if (result._debug && import.meta.env.VITE_DEBUG_AI === 'true') {
+                setDebugData(result._debug.extractedData);
+                setIsDebugModalOpen(true);
+            }
+            
+            const { _debug, ...projectData } = result;
+            setProjects([projectData, ...projects]);
             handleCloseModal();
         } catch (error) {
             console.error('Import project error:', error);
@@ -334,6 +363,14 @@ export const Projects = () => {
                     </div>
                 </div>
             </section>
+            
+            <DebugModal
+                isOpen={isDebugModalOpen}
+                onClose={() => setIsDebugModalOpen(false)}
+                title="Extracted Project Info"
+                data={debugData}
+            />
+
             {isModalOpen && (
                 <div 
                     role="dialog"
@@ -411,8 +448,46 @@ export const Projects = () => {
                             {t('project_modal_title')}
                         </h3>
                         
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ 
+                        <div style={{ position: 'relative' }}>
+                            {isLoading && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '-10px',
+                                    left: '-10px',
+                                    right: '-10px',
+                                    bottom: '-10px',
+                                    backgroundColor: 'rgba(26, 26, 46, 0.85)',
+                                    zIndex: 10,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: '8px',
+                                    backdropFilter: 'blur(2px)'
+                                }}>
+                                    <style>{`
+                                        @keyframes spin {
+                                            0% { transform: rotate(0deg); }
+                                            100% { transform: rotate(360deg); }
+                                        }
+                                    `}</style>
+                                    <div style={{
+                                        width: '50px',
+                                        height: '50px',
+                                        border: '4px solid rgba(0, 243, 255, 0.1)',
+                                        borderTop: '4px solid var(--primary-cyan)',
+                                        borderRadius: '50%',
+                                        animation: 'spin 1s linear infinite',
+                                        marginBottom: '1rem'
+                                    }} />
+                                    <span style={{ color: 'var(--primary-cyan)', fontWeight: 'bold', fontSize: '1.2rem', letterSpacing: '1px' }}>
+                                        {t('project_modal_loading')}
+                                    </span>
+                                </div>
+                            )}
+
+                            <div style={{ marginBottom: '1.5rem', opacity: isLoading ? 0.5 : 1 }}>
+                                <label style={{ 
                                 display: 'block', 
                                 marginBottom: '0.5rem', 
                                 color: 'var(--text-secondary)',
@@ -439,7 +514,7 @@ export const Projects = () => {
                             />
                         </div>
 
-                        <div style={{ marginBottom: '2rem' }}>
+                        <div style={{ marginBottom: '2rem', opacity: isLoading ? 0.5 : 1 }}>
                             <label style={{ 
                                 display: 'block', 
                                 marginBottom: '0.5rem', 
@@ -466,44 +541,49 @@ export const Projects = () => {
                                     resize: 'vertical'
                                 }}
                             />
-                            <div style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                                {projectText.length} characters
-                            </div>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-                            <button
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', opacity: isLoading ? 0.5 : 1 }}>
+                            <button 
                                 onClick={handleCloseModal}
-                                disabled={isLoading}
                                 style={{
                                     padding: '0.75rem 1.5rem',
-                                    borderRadius: '6px',
+                                    borderRadius: '4px',
                                     border: '1px solid var(--border-color)',
                                     background: 'transparent',
-                                    color: 'var(--text-secondary)',
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold'
+                                    color: 'var(--text-primary)',
+                                    cursor: 'pointer'
                                 }}
                             >
-                                {t('project_modal_cancel')}
+                                {t('cancel')}
                             </button>
-                            <button
+                            <button 
                                 onClick={handleImportProject}
                                 disabled={isLoading}
                                 style={{
                                     padding: '0.75rem 1.5rem',
-                                    borderRadius: '6px',
+                                    borderRadius: '4px',
                                     border: 'none',
-                                    background: 'var(--primary-cyan)',
+                                    background: isLoading ? 'var(--text-secondary)' : 'var(--primary-cyan)',
                                     color: '#000',
                                     fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    opacity: isLoading ? 0.7 : 1
+                                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                                    minWidth: '120px',
+                                    display: 'flex',
+                                    justifyContent: 'center'
                                 }}
                             >
-                                {isLoading ? t('project_modal_loading') : t('project_modal_load')}
+                                {isLoading ? (
+                                    <span style={{ 
+                                        display: 'inline-block',
+                                        animation: 'spin 1s linear infinite' 
+                                    }}>⌛</span>
+                                ) : (
+                                    t('project_import_button')
+                                )}
                             </button>
                         </div>
+                        </div> {/* Close relative container */}
                     </div>
                 </div>
             )}
