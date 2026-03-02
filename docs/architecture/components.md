@@ -10,6 +10,13 @@
 - Handles mobile menu toggling.
 - Includes a language selector dropdown with flag icons.
 
+### SideMenu
+`src/components/SideMenu.tsx`
+- Sidebar navigation for authenticated users.
+- Provides access to Profile, Projects, and Settings.
+- Includes a Logout button.
+- Highlight active route.
+
 ### Footer
 `src/components/Footer.tsx`
 - Application footer.

@@ -2,8 +2,84 @@ import { MainLayout } from '../layouts/MainLayout';
 import { useTranslation } from 'react-i18next';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DebugModal } from '../components/DebugModal';
 
 import type { Project } from '../types/project';
+
+const Tooltip = ({ text }: { text: string }) => {
+    const [isVisible, setIsVisible] = useState(false);
+
+    return (
+        <div 
+            onMouseEnter={() => setIsVisible(true)}
+            onMouseLeave={() => setIsVisible(false)}
+            style={{ 
+                position: 'relative', 
+                display: 'inline-flex', 
+                marginLeft: '8px', 
+                verticalAlign: 'middle',
+                cursor: 'help'
+            }}
+        >
+            <div style={{
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                border: '1px solid var(--text-secondary)',
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '10px',
+                fontWeight: 'bold'
+            }}>?</div>
+            
+            {isVisible && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    marginBottom: '8px',
+                    width: '220px',
+                    padding: '0.75rem',
+                    background: '#1a1a2e',
+                    border: '1px solid var(--primary-cyan)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '0.8rem',
+                    lineHeight: '1.4',
+                    zIndex: 100,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    pointerEvents: 'none',
+                    textAlign: 'center'
+                }}>
+                    {text}
+                    <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: '50%',
+                        marginLeft: '-6px',
+                        borderWidth: '6px',
+                        borderStyle: 'solid',
+                        borderColor: '#1a1a2e transparent transparent transparent'
+                    }}></div>
+                    <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: '50%',
+                        marginLeft: '-6px',
+                        marginTop: '-1px',
+                        borderWidth: '6px',
+                        borderStyle: 'solid',
+                        borderColor: 'var(--primary-cyan) transparent transparent transparent',
+                        zIndex: -1
+                    }}></div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 export const Projects = () => {
     const { t } = useTranslation();
@@ -13,9 +89,14 @@ export const Projects = () => {
     const [sortBy, setSortBy] = useState<'name' | 'date'>('date');
     const [isModalOpen, setIsModalOpen] = useState(false);
     
+    // Debug Modal State
+    const [debugData, setDebugData] = useState<any>(null);
+    const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
+    
     // New Project Form State
-    const [newProjectName, setNewProjectName] = useState('');
-    const [newProjectDescription, setNewProjectDescription] = useState('');
+    const [projectUrl, setProjectUrl] = useState('');
+    const [projectText, setProjectText] = useState('');
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
     
     const [isLoading, setIsLoading] = useState(false);
 
@@ -42,7 +123,15 @@ export const Projects = () => {
 
     const fetchProjects = async () => {
         try {
-            const response = await fetch(`${apiBaseUrl}/projects`);
+            const userStr = localStorage.getItem('vfcs_auth_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const headers: Record<string, string> = {};
+            
+            if (user && user.id) {
+                headers['x-user-id'] = String(user.id);
+            }
+
+            const response = await fetch(`${apiBaseUrl}/projects`, { headers });
             if (response.ok) {
                 const data = await response.json();
                 setProjects(data);
@@ -66,40 +155,62 @@ export const Projects = () => {
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
-        setNewProjectName('');
-        setNewProjectDescription('');
+        setProjectUrl('');
+        setProjectText('');
+        setToastMessage(null);
         setIsLoading(false);
     };
 
-    const handleCreateProject = async () => {
-        if (!newProjectName.trim()) return;
+    const handleImportProject = async () => {
+        if (!projectUrl.trim() && !projectText.trim()) {
+            setToastMessage(t('project_import_error_empty'));
+            // Auto hide after 3 seconds
+            setTimeout(() => setToastMessage(null), 3000);
+            return;
+        }
 
+        setToastMessage(null);
         setIsLoading(true);
         
         try {
-            const response = await fetch(`${apiBaseUrl}/projects`, {
+            const userStr = localStorage.getItem('vfcs_auth_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            
+            if (user && user.id) {
+                headers['x-user-id'] = String(user.id);
+            }
+
+            const response = await fetch(`${apiBaseUrl}/projects/import`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify({ 
-                    name: newProjectName,
-                    description: newProjectDescription,
-                    status: 'pending'
+                    url: projectUrl,
+                    text: projectText
                 }),
             });
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || 'Failed to create project');
+                throw new Error(errorData.message || 'Failed to import project');
             }
 
-            const newProject = await response.json();
-            setProjects([newProject, ...projects]);
+            const result = await response.json();
+            
+            // Check for debug data if enabled
+            if (result._debug && import.meta.env.VITE_DEBUG_AI === 'true') {
+                setDebugData(result._debug.extractedData);
+                setIsDebugModalOpen(true);
+            }
+            
+            const { _debug, ...projectData } = result;
+            setProjects([projectData, ...projects]);
             handleCloseModal();
         } catch (error) {
-            console.error('Create project error:', error);
-            alert(error instanceof Error ? error.message : 'Failed to create project');
+            console.error('Import project error:', error);
+            alert(error instanceof Error ? error.message : 'Failed to import project');
         } finally {
             setIsLoading(false);
         }
@@ -252,6 +363,14 @@ export const Projects = () => {
                     </div>
                 </div>
             </section>
+            
+            <DebugModal
+                isOpen={isDebugModalOpen}
+                onClose={() => setIsDebugModalOpen(false)}
+                title="Extracted Project Info"
+                data={debugData}
+            />
+
             {isModalOpen && (
                 <div 
                     role="dialog"
@@ -280,6 +399,25 @@ export const Projects = () => {
                         boxShadow: '0 0 30px rgba(0, 255, 242, 0.15)',
                         position: 'relative'
                     }}>
+                        {toastMessage && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '-60px',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                background: 'rgba(255, 68, 68, 0.9)',
+                                color: 'white',
+                                padding: '0.75rem 1.5rem',
+                                borderRadius: '8px',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                                zIndex: 2000,
+                                whiteSpace: 'nowrap',
+                                backdropFilter: 'blur(4px)',
+                                border: '1px solid #ff4444'
+                            }}>
+                                ⚠️ {toastMessage}
+                            </div>
+                        )}
                         <button 
                             onClick={handleCloseModal}
                             style={{
@@ -310,20 +448,59 @@ export const Projects = () => {
                             {t('project_modal_title')}
                         </h3>
                         
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ 
+                        <div style={{ position: 'relative' }}>
+                            {isLoading && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '-10px',
+                                    left: '-10px',
+                                    right: '-10px',
+                                    bottom: '-10px',
+                                    backgroundColor: 'rgba(26, 26, 46, 0.85)',
+                                    zIndex: 10,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: '8px',
+                                    backdropFilter: 'blur(2px)'
+                                }}>
+                                    <style>{`
+                                        @keyframes spin {
+                                            0% { transform: rotate(0deg); }
+                                            100% { transform: rotate(360deg); }
+                                        }
+                                    `}</style>
+                                    <div style={{
+                                        width: '50px',
+                                        height: '50px',
+                                        border: '4px solid rgba(0, 243, 255, 0.1)',
+                                        borderTop: '4px solid var(--primary-cyan)',
+                                        borderRadius: '50%',
+                                        animation: 'spin 1s linear infinite',
+                                        marginBottom: '1rem'
+                                    }} />
+                                    <span style={{ color: 'var(--primary-cyan)', fontWeight: 'bold', fontSize: '1.2rem', letterSpacing: '1px' }}>
+                                        {t('project_modal_loading')}
+                                    </span>
+                                </div>
+                            )}
+
+                            <div style={{ marginBottom: '1.5rem', opacity: isLoading ? 0.5 : 1 }}>
+                                <label style={{ 
                                 display: 'block', 
                                 marginBottom: '0.5rem', 
                                 color: 'var(--text-secondary)',
                                 fontSize: '0.9rem' 
                             }}>
-                                Project Name
+                                {t('project_modal_url_label')}
+                                <Tooltip text={t('project_modal_url_tooltip')} />
                             </label>
                             <input
                                 type="text"
-                                value={newProjectName}
-                                onChange={(e) => setNewProjectName(e.target.value)}
-                                placeholder="Enter project name"
+                                value={projectUrl}
+                                onChange={(e) => setProjectUrl(e.target.value)}
+                                placeholder={t('project_modal_url_placeholder')}
                                 style={{
                                     width: '100%',
                                     padding: '0.75rem',
@@ -337,19 +514,20 @@ export const Projects = () => {
                             />
                         </div>
 
-                        <div style={{ marginBottom: '2rem' }}>
+                        <div style={{ marginBottom: '2rem', opacity: isLoading ? 0.5 : 1 }}>
                             <label style={{ 
                                 display: 'block', 
                                 marginBottom: '0.5rem', 
-                                color: 'var(--text-secondary)',
+                                color: 'var(--text-secondary)', 
                                 fontSize: '0.9rem' 
                             }}>
-                                Scraping Content / Context
+                                {t('project_modal_text_label')}
+                                <Tooltip text={t('project_modal_text_tooltip')} />
                             </label>
                             <textarea
-                                value={newProjectDescription}
-                                onChange={(e) => setNewProjectDescription(e.target.value)}
-                                placeholder="Paste project description or raw requirements..."
+                                value={projectText}
+                                onChange={(e) => setProjectText(e.target.value)}
+                                placeholder={t('project_modal_text_placeholder')}
                                 rows={5}
                                 style={{
                                     width: '100%',
@@ -363,44 +541,49 @@ export const Projects = () => {
                                     resize: 'vertical'
                                 }}
                             />
-                            <div style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                                {newProjectDescription.length} characters
-                            </div>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-                            <button
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', opacity: isLoading ? 0.5 : 1 }}>
+                            <button 
                                 onClick={handleCloseModal}
+                                style={{
+                                    padding: '0.75rem 1.5rem',
+                                    borderRadius: '4px',
+                                    border: '1px solid var(--border-color)',
+                                    background: 'transparent',
+                                    color: 'var(--text-primary)',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                {t('cancel')}
+                            </button>
+                            <button 
+                                onClick={handleImportProject}
                                 disabled={isLoading}
                                 style={{
                                     padding: '0.75rem 1.5rem',
-                                    borderRadius: '6px',
-                                    border: '1px solid var(--border-color)',
-                                    background: 'transparent',
-                                    color: 'var(--text-secondary)',
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold'
-                                }}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleCreateProject}
-                                disabled={isLoading || !newProjectName.trim()}
-                                style={{
-                                    padding: '0.75rem 1.5rem',
-                                    borderRadius: '6px',
+                                    borderRadius: '4px',
                                     border: 'none',
-                                    background: 'var(--primary-cyan)',
+                                    background: isLoading ? 'var(--text-secondary)' : 'var(--primary-cyan)',
                                     color: '#000',
                                     fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    opacity: (isLoading || !newProjectName.trim()) ? 0.7 : 1
+                                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                                    minWidth: '120px',
+                                    display: 'flex',
+                                    justifyContent: 'center'
                                 }}
                             >
-                                {isLoading ? 'Creating...' : 'Create Project'}
+                                {isLoading ? (
+                                    <span style={{ 
+                                        display: 'inline-block',
+                                        animation: 'spin 1s linear infinite' 
+                                    }}>⌛</span>
+                                ) : (
+                                    t('project_import_button')
+                                )}
                             </button>
                         </div>
+                        </div> {/* Close relative container */}
                     </div>
                 </div>
             )}

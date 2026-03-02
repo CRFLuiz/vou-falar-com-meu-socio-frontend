@@ -14,10 +14,37 @@
 
 ## Login
 `src/pages/Login.tsx`
-- User authentication page (implementation pending).
+- User authentication page.
+- Handles login with email and password.
+- Integrates with backend `/auth/login`.
+- Stores user data in local storage.
 
 ## Dashboard
 `src/pages/Dashboard.tsx`
 - Main authenticated application page.
 - Includes profile completion modal when required fields are missing.
 - Supports AI assistance for required profile fields via the backend `/ai/profile/help-required` endpoint.
+
+## Profile
+`src/pages/Profile.tsx`
+- User profile management.
+- Allows viewing and editing personal and professional information.
+- Includes AI assistance for profile enhancement.
+
+## Projects
+`src/pages/Projects.tsx`
+- Lists user projects.
+- Allows creating new projects and importing existing ones.
+- Provides search and sorting functionality.
+
+## Project Details
+`src/pages/ProjectDetails.tsx`
+- Detailed view of a specific project.
+- Organized into phases: Reconnaissance, Hat-Trick, Delivery.
+- Contains tabs for various project modules (Discovery, Architecture, Engineering, etc.).
+- Allows generating project stages via AI.
+
+## Settings
+`src/pages/Settings.tsx`
+- Application settings page.
+- Currently a placeholder for future configuration options.
