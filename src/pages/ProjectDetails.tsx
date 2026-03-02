@@ -1,6 +1,6 @@
 import { MainLayout } from '../layouts/MainLayout';
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Project } from '../types/project';
 
@@ -59,14 +59,14 @@ export const ProjectDetails = () => {
         return `${protocol}//api.${host}`;
     }, []);
 
-    const fetchProject = async () => {
+    const fetchProject = useCallback(async () => {
         if (!id) return;
         setIsLoading(true);
         try {
             const userStr = localStorage.getItem('vfcs_auth_user');
             const user = userStr ? JSON.parse(userStr) : null;
             const headers: Record<string, string> = {};
-            
+
             if (user && user.id) {
                 headers['x-user-id'] = String(user.id);
             }
@@ -85,7 +85,7 @@ export const ProjectDetails = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [apiBaseUrl, id, navigate]);
 
     const generateStage = async (stageName: string, endpointSuffix: string) => {
         if (!project || !id) return;
@@ -123,14 +123,14 @@ export const ProjectDetails = () => {
     };
 
     useEffect(() => {
-        fetchProject();
-    }, [id, apiBaseUrl]);
+        void fetchProject();
+    }, [fetchProject]);
 
     const renderTabContent = () => {
         if (!project) return null;
 
         const renderGenerateButton = (label: string, endpoint: string, disabled: boolean = false, disabledReason?: string) => (
-            <div className="mb-4">
+            <div style={{ marginBottom: '0.75rem' }}>
                 <button
                     onClick={() => generateStage(label, endpoint)}
                     disabled={disabled || isGenerating}
@@ -145,7 +145,7 @@ export const ProjectDetails = () => {
                         opacity: disabled ? 0.7 : 1,
                     }}
                 >
-                    {isGenerating ? 'Processing...' : `Generate ${label}`}
+                    {isGenerating ? t('project_details_processing') : `${t('project_details_generate')} ${label}`}
                 </button>
                 {disabled && disabledReason && (
                     <p className="text-sm text-yellow-500 mt-2">⚠️ {disabledReason}</p>
@@ -162,7 +162,7 @@ export const ProjectDetails = () => {
         );
 
         // Helper for key-value display
-        const KeyValue = ({ label, value }: { label: string, value: any }) => (
+        const KeyValue = ({ label, value }: { label: string; value: unknown }) => (
             <div className="mb-2 grid grid-cols-1 md:grid-cols-3 gap-2 border-b border-gray-700 pb-2 last:border-0">
                 <span className="text-gray-400 font-medium">{label}:</span>
                 <span className="md:col-span-2 text-gray-100">{String(value)}</span>
@@ -176,22 +176,110 @@ export const ProjectDetails = () => {
             </ul>
         );
 
+        type EngineeringTask = { name: string; domain: string; complexity: string };
+        type RiskMatrixItem = {
+            description: string;
+            category: string;
+            probability: string;
+            impact: string;
+            mitigation: string;
+        };
+        type DocumentItem = { type: string; audience: string; format: string; content: string };
+
+        const toRecord = (value: unknown): Record<string, unknown> =>
+            typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+
+        const toEngineeringTask = (task: unknown): EngineeringTask => {
+            const t = toRecord(task);
+            return {
+                name: typeof t.name === 'string' ? t.name : '',
+                domain: typeof t.domain === 'string' ? t.domain : '',
+                complexity: typeof t.complexity === 'string' ? t.complexity : String(t.complexity ?? ''),
+            };
+        };
+
+        const toRiskMatrixItem = (risk: unknown): RiskMatrixItem => {
+            const r = toRecord(risk);
+            return {
+                description: typeof r.description === 'string' ? r.description : '',
+                category: typeof r.category === 'string' ? r.category : '',
+                probability: typeof r.probability === 'string' ? r.probability : String(r.probability ?? ''),
+                impact: typeof r.impact === 'string' ? r.impact : String(r.impact ?? ''),
+                mitigation: typeof r.mitigation === 'string' ? r.mitigation : '',
+            };
+        };
+
+        const toDocumentItem = (doc: unknown): DocumentItem => {
+            const d = toRecord(doc);
+            return {
+                type: typeof d.type === 'string' ? d.type : 'document',
+                audience: typeof d.audience === 'string' ? d.audience : '',
+                format: typeof d.format === 'string' ? d.format : '',
+                content: typeof d.content === 'string' ? d.content : '',
+            };
+        };
+
         switch (activeTab) {
-            case 'discovery':
+            case 'discovery': {
                 const dData = project.discovery_data;
+                const discoverySummaryItems = [
+                    t('project_details_discovery_summary_item_1'),
+                    t('project_details_discovery_summary_item_2'),
+                    t('project_details_discovery_summary_item_3'),
+                    t('project_details_discovery_summary_item_4'),
+                    t('project_details_discovery_summary_item_5'),
+                ];
+                const discoveryTitle = t('project_details_discovery_title');
+                const discoverySubtitle = t('project_details_discovery_subtitle');
+                const discoveryGenerateLabel = t('project_details_discovery_generate_label');
                 return (
                     <div>
-                        <div className="flex justify-between items-center mb-6">
-                            <div>
-                                <h3 className="text-2xl font-bold text-white">Structured Discovery</h3>
-                                <p className="text-gray-400">Analysis of business context and requirements</p>
+                        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                                {discoveryTitle}
+                            </h3>
+                            <p style={{ margin: '0.4rem 0 1.25rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                                {discoverySubtitle}
+                            </p>
+                            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                {renderGenerateButton(discoveryGenerateLabel, 'discovery')}
                             </div>
-                            {renderGenerateButton('Discovery Data', 'discovery')}
                         </div>
 
-                        <SectionCard title="Project Description">
-                            <p className="text-gray-300 leading-relaxed">{project.description}</p>
-                        </SectionCard>
+                        <div
+                            style={{
+                                maxWidth: '920px',
+                                margin: '0 auto 2.75rem',
+                                padding: '1.5rem',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '12px',
+                                background: 'rgba(0, 0, 0, 0.25)',
+                            }}
+                        >
+                            <h4
+                                style={{
+                                    margin: 0,
+                                    marginBottom: '0.75rem',
+                                    color: 'var(--primary-cyan)',
+                                    fontSize: '0.95rem',
+                                    letterSpacing: '0.12em',
+                                    textTransform: 'uppercase',
+                                }}
+                            >
+                                {t('project_details_discovery_summary_title')}
+                            </h4>
+                            <p style={{ margin: 0, marginBottom: '1rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                {t('project_details_discovery_summary_intro')}
+                            </p>
+                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: '0.75rem' }}>
+                                {discoverySummaryItems.map((item, idx) => (
+                                    <li key={idx} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', lineHeight: 1.6 }}>
+                                        <span style={{ color: 'var(--primary-cyan)', fontWeight: 800, marginTop: '0.05rem' }}>•</span>
+                                        <span style={{ color: 'var(--text-primary)' }}>{item}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
 
                         {dData ? (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -249,13 +337,14 @@ export const ProjectDetails = () => {
                             </div>
                         ) : (
                             <div className="text-center py-12 bg-gray-800 rounded border border-dashed border-gray-600">
-                                <p className="text-gray-400 mb-4">No discovery data generated yet.</p>
-                                <p className="text-sm text-gray-500">Click the generate button above to analyze the project description.</p>
+                                <p className="text-gray-400 mb-4">{t('project_details_discovery_empty_title')}</p>
+                                <p className="text-sm text-gray-500">{t('project_details_discovery_empty_cta')}</p>
                             </div>
                         )}
                     </div>
                 );
-            case 'risk':
+            }
+            case 'risk': {
                 const riskDisabled = !project.discovery_data;
                 const rData = project.risk_analysis_data;
                 return (
@@ -317,7 +406,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'architecture':
+            }
+            case 'architecture': {
                 const archDisabled = !project.discovery_data || !project.risk_analysis_data;
                 const aData = project.architecture_data;
                 return (
@@ -385,7 +475,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'engineering':
+            }
+            case 'engineering': {
                 const engDisabled = !project.architecture_data;
                 const eData = project.engineering_data;
                 return (
@@ -441,17 +532,20 @@ export const ProjectDetails = () => {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-700">
-                                                    {eData.tasks?.slice(0, 10).map((task: any, i: number) => (
+                                                    {eData.tasks?.slice(0, 10).map((task: unknown, i: number) => {
+                                                        const parsed = toEngineeringTask(task);
+                                                        return (
                                                         <tr key={i} className="hover:bg-gray-700/50">
-                                                            <td className="p-3 text-gray-200">{task.name}</td>
+                                                            <td className="p-3 text-gray-200">{parsed.name}</td>
                                                             <td className="p-3">
                                                                 <span className="px-2 py-1 bg-gray-800 rounded text-xs border border-gray-600">
-                                                                    {task.domain}
+                                                                    {parsed.domain}
                                                                 </span>
                                                             </td>
-                                                            <td className="p-3">{task.complexity}</td>
+                                                            <td className="p-3">{parsed.complexity}</td>
                                                         </tr>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                             {eData.tasks?.length > 10 && (
@@ -469,7 +563,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'risk_intel':
+            }
+            case 'risk_intel': {
                 const riskIntelDisabled = !project.discovery_data || !project.architecture_data || !project.engineering_data;
                 const riData = project.risk_intel_data;
                 return (
@@ -517,15 +612,18 @@ export const ProjectDetails = () => {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-700">
-                                                    {riData.risk_matrix?.map((risk: any, i: number) => (
-                                                        <tr key={i} className="hover:bg-gray-700/50">
-                                                            <td className="p-3 text-gray-200 font-medium">{risk.description}</td>
-                                                            <td className="p-3">{risk.category}</td>
-                                                            <td className="p-3 text-center">{risk.probability}</td>
-                                                            <td className="p-3 text-center">{risk.impact}</td>
-                                                            <td className="p-3 text-xs italic">{risk.mitigation}</td>
-                                                        </tr>
-                                                    ))}
+                                                    {riData.risk_matrix?.map((risk: unknown, i: number) => {
+                                                        const parsed = toRiskMatrixItem(risk);
+                                                        return (
+                                                            <tr key={i} className="hover:bg-gray-700/50">
+                                                                <td className="p-3 text-gray-200 font-medium">{parsed.description}</td>
+                                                                <td className="p-3">{parsed.category}</td>
+                                                                <td className="p-3 text-center">{parsed.probability}</td>
+                                                                <td className="p-3 text-center">{parsed.impact}</td>
+                                                                <td className="p-3 text-xs italic">{parsed.mitigation}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                         </div>
@@ -540,7 +638,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'estimation':
+            }
+            case 'estimation': {
                 const estDisabled = !project.engineering_data || !project.risk_intel_data;
                 const esData = project.estimation_data;
                 return (
@@ -604,8 +703,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'documents':
-                 // Documents might not strictly require everything, but let's say it needs estimation at least
+            }
+            case 'documents': {
                 const docDisabled = !project.estimation_data;
                 const docData = project.documents_data;
                 return (
@@ -620,18 +719,19 @@ export const ProjectDetails = () => {
 
                         {docData ? (
                             <div className="grid grid-cols-1 gap-6">
-                                {docData.documents?.map((doc: any, i: number) => (
+                                {docData.documents?.map((doc: unknown, i: number) => {
+                                    const parsed = toDocumentItem(doc);
+                                    return (
                                     <div key={i} className="bg-gray-800 p-6 rounded border border-gray-700">
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
-                                                <h4 className="text-xl font-bold text-cyan-400 capitalize">{doc.type.replace(/_/g, ' ')}</h4>
-                                                <p className="text-sm text-gray-400">Audience: {doc.audience} | Format: {doc.format}</p>
+                                                <h4 className="text-xl font-bold text-cyan-400 capitalize">{parsed.type.replace(/_/g, ' ')}</h4>
+                                                <p className="text-sm text-gray-400">Audience: {parsed.audience} | Format: {parsed.format}</p>
                                             </div>
                                             <button 
                                                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-bold transition-colors"
                                                 onClick={() => {
-                                                    // Simple download/view simulation
-                                                    const blob = new Blob([doc.content], { type: 'text/markdown' });
+                                                    const blob = new Blob([parsed.content], { type: 'text/markdown' });
                                                     const url = URL.createObjectURL(blob);
                                                     window.open(url, '_blank');
                                                 }}
@@ -640,10 +740,11 @@ export const ProjectDetails = () => {
                                             </button>
                                         </div>
                                         <div className="bg-gray-900 p-4 rounded h-64 overflow-y-auto font-mono text-sm text-gray-300 whitespace-pre-wrap">
-                                            {doc.content}
+                                            {parsed.content}
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
                              <div className="text-center py-12 bg-gray-800 rounded border border-dashed border-gray-600">
@@ -653,6 +754,7 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
+            }
             default:
                 return null;
         }
