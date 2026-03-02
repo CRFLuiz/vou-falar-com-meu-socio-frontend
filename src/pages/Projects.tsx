@@ -1,6 +1,6 @@
 import { MainLayout } from '../layouts/MainLayout';
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DebugModal } from '../components/DebugModal';
 
@@ -90,7 +90,7 @@ export const Projects = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     
     // Debug Modal State
-    const [debugData, setDebugData] = useState<any>(null);
+    const [debugData, setDebugData] = useState<unknown>(null);
     const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
     
     // New Project Form State
@@ -121,7 +121,7 @@ export const Projects = () => {
         return `${protocol}//api.${host}`;
     }, []);
 
-    const fetchProjects = async () => {
+    const fetchProjects = useCallback(async () => {
         try {
             const userStr = localStorage.getItem('vfcs_auth_user');
             const user = userStr ? JSON.parse(userStr) : null;
@@ -139,11 +139,11 @@ export const Projects = () => {
         } catch (error) {
             console.error('Failed to fetch projects', error);
         }
-    };
+    }, [apiBaseUrl]);
 
     useEffect(() => {
-        fetchProjects();
-    }, [apiBaseUrl]);
+        void fetchProjects();
+    }, [fetchProjects]);
 
     const handleProjectClick = (project: Project) => {
         navigate(`/projects/${project.id}`);
@@ -205,8 +205,9 @@ export const Projects = () => {
                 setIsDebugModalOpen(true);
             }
             
-            const { _debug, ...projectData } = result;
-            setProjects([projectData, ...projects]);
+            const { _debug: __debug, ...projectData } = result;
+            void __debug;
+            setProjects((prev) => [projectData, ...prev]);
             handleCloseModal();
         } catch (error) {
             console.error('Import project error:', error);
