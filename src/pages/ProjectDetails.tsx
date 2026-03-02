@@ -110,13 +110,25 @@ export const ProjectDetails = () => {
                 const updatedProject = await response.json();
                 setProject(updatedProject);
             } else {
-                const errorData = await response.json();
-                console.error(`Failed to generate ${stageName}:`, errorData);
-                alert(`Failed to generate ${stageName}: ${errorData.message || 'Unknown error'}`);
+                const errorText = await response.text();
+                let message = 'Unknown error';
+                try {
+                    const parsed = JSON.parse(errorText) as { message?: unknown };
+                    if (typeof parsed?.message === 'string' && parsed.message.trim().length > 0) {
+                        message = parsed.message;
+                    }
+                } catch {
+                    if (errorText.trim().length > 0) {
+                        message = errorText.trim();
+                    }
+                }
+                console.error(`Failed to generate ${stageName}:`, errorText);
+                alert(`Failed to generate ${stageName}: ${message}`);
             }
         } catch (error) {
             console.error(`Error generating ${stageName}:`, error);
-            alert(`Error generating ${stageName}`);
+            const message = error instanceof Error ? error.message : String(error);
+            alert(`Error generating ${stageName}: ${message}`);
         } finally {
             setIsGenerating(false);
         }
