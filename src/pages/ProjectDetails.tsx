@@ -1,6 +1,6 @@
 import { MainLayout } from '../layouts/MainLayout';
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Project } from '../types/project';
 
@@ -59,7 +59,7 @@ export const ProjectDetails = () => {
         return `${protocol}//api.${host}`;
     }, []);
 
-    const fetchProject = async () => {
+    const fetchProject = useCallback(async () => {
         if (!id) return;
         setIsLoading(true);
         try {
@@ -85,7 +85,7 @@ export const ProjectDetails = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [apiBaseUrl, id, navigate]);
 
     const generateStage = async (stageName: string, endpointSuffix: string) => {
         if (!project || !id) return;
@@ -123,8 +123,8 @@ export const ProjectDetails = () => {
     };
 
     useEffect(() => {
-        fetchProject();
-    }, [id, apiBaseUrl]);
+        void fetchProject();
+    }, [fetchProject]);
 
     const renderTabContent = () => {
         if (!project) return null;
@@ -162,10 +162,21 @@ export const ProjectDetails = () => {
         );
 
         // Helper for key-value display
-        const KeyValue = ({ label, value }: { label: string, value: any }) => (
+        const formatValue = (value: unknown) => {
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'string') return value;
+            if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+            try {
+                return JSON.stringify(value);
+            } catch {
+                return String(value);
+            }
+        };
+
+        const KeyValue = ({ label, value }: { label: string, value: unknown }) => (
             <div className="mb-2 grid grid-cols-1 md:grid-cols-3 gap-2 border-b border-gray-700 pb-2 last:border-0">
                 <span className="text-gray-400 font-medium">{label}:</span>
-                <span className="md:col-span-2 text-gray-100">{String(value)}</span>
+                <span className="md:col-span-2 text-gray-100">{formatValue(value)}</span>
             </div>
         );
 
@@ -177,8 +188,15 @@ export const ProjectDetails = () => {
         );
 
         switch (activeTab) {
-            case 'discovery':
+            case 'discovery': {
                 const dData = project.discovery_data;
+                const discoverySummaryItems = [
+                    t('project_details_discovery_summary_item_1'),
+                    t('project_details_discovery_summary_item_2'),
+                    t('project_details_discovery_summary_item_3'),
+                    t('project_details_discovery_summary_item_4'),
+                    t('project_details_discovery_summary_item_5'),
+                ];
                 return (
                     <div>
                         <div className="flex justify-between items-center mb-6">
@@ -189,63 +207,82 @@ export const ProjectDetails = () => {
                             {renderGenerateButton('Discovery Data', 'discovery')}
                         </div>
 
-                        <SectionCard title="Project Description">
-                            <p className="text-gray-300 leading-relaxed">{project.description}</p>
-                        </SectionCard>
+                        {!dData && (
+                            <>
+                                <SectionCard title={t('project_details_discovery_summary_title')}>
+                                    <p className="text-gray-300 leading-relaxed mb-3">{t('project_details_discovery_summary_intro')}</p>
+                                    <ListDisplay items={discoverySummaryItems} />
+                                </SectionCard>
+                                <SectionCard title="Project Description">
+                                    <p className="text-gray-300 leading-relaxed">{project.description}</p>
+                                </SectionCard>
+                            </>
+                        )}
 
                         {dData ? (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <SectionCard title="Business Context">
-                                    <KeyValue label="Objective" value={dData.business?.objective} />
-                                    <KeyValue label="Initiative Type" value={dData.business?.initiative_type} />
-                                    <KeyValue label="Target Deadline" value={dData.business?.deadline} />
-                                    <KeyValue label="Criticality" value={dData.business?.criticality} />
-                                </SectionCard>
+                            <div
+                                style={{
+                                    maxWidth: '1100px',
+                                    margin: '0 auto',
+                                    padding: '1.5rem',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '12px',
+                                    background: 'rgba(0, 0, 0, 0.25)',
+                                }}
+                            >
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <SectionCard title="Business Context">
+                                        <KeyValue label="Objective" value={dData.business?.objective} />
+                                        <KeyValue label="Initiative Type" value={dData.business?.initiative_type} />
+                                        <KeyValue label="Target Deadline" value={dData.business?.deadline} />
+                                        <KeyValue label="Criticality" value={dData.business?.criticality} />
+                                    </SectionCard>
 
-                                <SectionCard title="Analysis Metrics">
-                                    <div className="flex items-center gap-4 mb-4">
-                                        <div className="text-center p-3 bg-gray-700 rounded-lg min-w-[100px]">
-                                            <div className="text-2xl font-bold text-cyan-400">{dData.confidence_score}%</div>
-                                            <div className="text-xs text-gray-400">Confidence</div>
-                                        </div>
-                                        <div className="text-center p-3 bg-gray-700 rounded-lg min-w-[100px]">
-                                            <div className={`text-xl font-bold ${dData.estimation_risk === 'High' ? 'text-red-400' : 'text-green-400'}`}>
-                                                {dData.estimation_risk}
+                                    <SectionCard title="Analysis Metrics">
+                                        <div className="flex items-center gap-4 mb-4">
+                                            <div className="text-center p-3 bg-gray-700 rounded-lg min-w-[100px]">
+                                                <div className="text-2xl font-bold text-cyan-400">{dData.confidence_score}%</div>
+                                                <div className="text-xs text-gray-400">Confidence</div>
                                             </div>
-                                            <div className="text-xs text-gray-400">Risk Level</div>
+                                            <div className="text-center p-3 bg-gray-700 rounded-lg min-w-[100px]">
+                                                <div className={`text-xl font-bold ${dData.estimation_risk === 'High' ? 'text-red-400' : 'text-green-400'}`}>
+                                                    {dData.estimation_risk}
+                                                </div>
+                                                <div className="text-xs text-gray-400">Risk Level</div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <h5 className="text-sm font-semibold text-gray-300">Inferred Signals:</h5>
-                                        <div className="flex flex-wrap gap-2">
-                                            {dData.inferred_signals?.map((sig: string, i: number) => (
-                                                <span key={i} className="px-2 py-1 bg-gray-700 text-xs rounded text-cyan-200 border border-cyan-900">{sig}</span>
-                                            ))}
+                                        <div className="space-y-2">
+                                            <h5 className="text-sm font-semibold text-gray-300">Inferred Signals:</h5>
+                                            <div className="flex flex-wrap gap-2">
+                                                {dData.inferred_signals?.map((sig: string, i: number) => (
+                                                    <span key={i} className="px-2 py-1 bg-gray-700 text-xs rounded text-cyan-200 border border-cyan-900">{sig}</span>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                </SectionCard>
+                                    </SectionCard>
 
-                                <SectionCard title="Functional Scope">
-                                    <div className="mb-4">
-                                        <h5 className="text-sm font-semibold text-gray-300 mb-2">Build Items:</h5>
-                                        <ListDisplay items={dData.functional_scope?.build_items} />
-                                    </div>
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-gray-300 mb-2">Integrations:</h5>
-                                        <ListDisplay items={dData.functional_scope?.integrations} />
-                                    </div>
-                                </SectionCard>
-
-                                <SectionCard title="Non-Functional Requirements">
-                                    {Object.entries(dData.non_functional || {}).map(([key, val]) => (
-                                        <div key={key} className="mb-3">
-                                            <h5 className="text-sm font-semibold text-gray-300 capitalize mb-1">{key}:</h5>
-                                            <p className="text-sm text-gray-400 bg-gray-900 p-2 rounded border border-gray-700">
-                                                {JSON.stringify(val)}
-                                            </p>
+                                    <SectionCard title="Functional Scope">
+                                        <div className="mb-4">
+                                            <h5 className="text-sm font-semibold text-gray-300 mb-2">Build Items:</h5>
+                                            <ListDisplay items={dData.functional_scope?.build_items} />
                                         </div>
-                                    ))}
-                                </SectionCard>
+                                        <div>
+                                            <h5 className="text-sm font-semibold text-gray-300 mb-2">Integrations:</h5>
+                                            <ListDisplay items={dData.functional_scope?.integrations} />
+                                        </div>
+                                    </SectionCard>
+
+                                    <SectionCard title="Non-Functional Requirements">
+                                        {Object.entries(dData.non_functional || {}).map(([key, val]) => (
+                                            <div key={key} className="mb-3">
+                                                <h5 className="text-sm font-semibold text-gray-300 capitalize mb-1">{key}:</h5>
+                                                <p className="text-sm text-gray-400 bg-gray-900 p-2 rounded border border-gray-700">
+                                                    {JSON.stringify(val)}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </SectionCard>
+                                </div>
                             </div>
                         ) : (
                             <div className="text-center py-12 bg-gray-800 rounded border border-dashed border-gray-600">
@@ -255,7 +292,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'risk':
+            }
+            case 'risk': {
                 const riskDisabled = !project.discovery_data;
                 const rData = project.risk_analysis_data;
                 return (
@@ -317,7 +355,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'architecture':
+            }
+            case 'architecture': {
                 const archDisabled = !project.discovery_data || !project.risk_analysis_data;
                 const aData = project.architecture_data;
                 return (
@@ -385,7 +424,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'engineering':
+            }
+            case 'engineering': {
                 const engDisabled = !project.architecture_data;
                 const eData = project.engineering_data;
                 return (
@@ -441,17 +481,30 @@ export const ProjectDetails = () => {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-700">
-                                                    {eData.tasks?.slice(0, 10).map((task: any, i: number) => (
-                                                        <tr key={i} className="hover:bg-gray-700/50">
-                                                            <td className="p-3 text-gray-200">{task.name}</td>
-                                                            <td className="p-3">
-                                                                <span className="px-2 py-1 bg-gray-800 rounded text-xs border border-gray-600">
-                                                                    {task.domain}
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-3">{task.complexity}</td>
-                                                        </tr>
-                                                    ))}
+                                                    {eData.tasks?.slice(0, 10).map((task: unknown, i: number) => {
+                                                        const t =
+                                                            typeof task === 'object' && task !== null
+                                                                ? (task as Record<string, unknown>)
+                                                                : {};
+                                                        const name = typeof t.name === 'string' ? t.name : '';
+                                                        const domain = typeof t.domain === 'string' ? t.domain : '';
+                                                        const complexity =
+                                                            typeof t.complexity === 'string' || typeof t.complexity === 'number'
+                                                                ? String(t.complexity)
+                                                                : '';
+
+                                                        return (
+                                                            <tr key={i} className="hover:bg-gray-700/50">
+                                                                <td className="p-3 text-gray-200">{name}</td>
+                                                                <td className="p-3">
+                                                                    <span className="px-2 py-1 bg-gray-800 rounded text-xs border border-gray-600">
+                                                                        {domain}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-3">{complexity}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                             {eData.tasks?.length > 10 && (
@@ -469,7 +522,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'risk_intel':
+            }
+            case 'risk_intel': {
                 const riskIntelDisabled = !project.discovery_data || !project.architecture_data || !project.engineering_data;
                 const riData = project.risk_intel_data;
                 return (
@@ -517,15 +571,31 @@ export const ProjectDetails = () => {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-700">
-                                                    {riData.risk_matrix?.map((risk: any, i: number) => (
-                                                        <tr key={i} className="hover:bg-gray-700/50">
-                                                            <td className="p-3 text-gray-200 font-medium">{risk.description}</td>
-                                                            <td className="p-3">{risk.category}</td>
-                                                            <td className="p-3 text-center">{risk.probability}</td>
-                                                            <td className="p-3 text-center">{risk.impact}</td>
-                                                            <td className="p-3 text-xs italic">{risk.mitigation}</td>
-                                                        </tr>
-                                                    ))}
+                                                    {riData.risk_matrix?.map((risk: unknown, i: number) => {
+                                                        const r =
+                                                            typeof risk === 'object' && risk !== null
+                                                                ? (risk as Record<string, unknown>)
+                                                                : {};
+
+                                                        const description = typeof r.description === 'string' ? r.description : '';
+                                                        const category = typeof r.category === 'string' ? r.category : '';
+                                                        const probability =
+                                                            typeof r.probability === 'string' || typeof r.probability === 'number'
+                                                                ? String(r.probability)
+                                                                : '';
+                                                        const impact = typeof r.impact === 'string' || typeof r.impact === 'number' ? String(r.impact) : '';
+                                                        const mitigation = typeof r.mitigation === 'string' ? r.mitigation : '';
+
+                                                        return (
+                                                            <tr key={i} className="hover:bg-gray-700/50">
+                                                                <td className="p-3 text-gray-200 font-medium">{description}</td>
+                                                                <td className="p-3">{category}</td>
+                                                                <td className="p-3 text-center">{probability}</td>
+                                                                <td className="p-3 text-center">{impact}</td>
+                                                                <td className="p-3 text-xs italic">{mitigation}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                         </div>
@@ -540,7 +610,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'estimation':
+            }
+            case 'estimation': {
                 const estDisabled = !project.engineering_data || !project.risk_intel_data;
                 const esData = project.estimation_data;
                 return (
@@ -604,7 +675,8 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
-            case 'documents':
+            }
+            case 'documents': {
                  // Documents might not strictly require everything, but let's say it needs estimation at least
                 const docDisabled = !project.estimation_data;
                 const docData = project.documents_data;
@@ -620,18 +692,24 @@ export const ProjectDetails = () => {
 
                         {docData ? (
                             <div className="grid grid-cols-1 gap-6">
-                                {docData.documents?.map((doc: any, i: number) => (
-                                    <div key={i} className="bg-gray-800 p-6 rounded border border-gray-700">
+                                {docData.documents?.map((doc: unknown, i: number) => {
+                                    const d = typeof doc === 'object' && doc !== null ? (doc as Record<string, unknown>) : {};
+                                    const type = typeof d.type === 'string' ? d.type : '';
+                                    const audience = typeof d.audience === 'string' ? d.audience : '';
+                                    const format = typeof d.format === 'string' ? d.format : '';
+                                    const content = typeof d.content === 'string' ? d.content : '';
+
+                                    return (
+                                        <div key={i} className="bg-gray-800 p-6 rounded border border-gray-700">
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
-                                                <h4 className="text-xl font-bold text-cyan-400 capitalize">{doc.type.replace(/_/g, ' ')}</h4>
-                                                <p className="text-sm text-gray-400">Audience: {doc.audience} | Format: {doc.format}</p>
+                                                <h4 className="text-xl font-bold text-cyan-400 capitalize">{type.replace(/_/g, ' ')}</h4>
+                                                <p className="text-sm text-gray-400">Audience: {audience} | Format: {format}</p>
                                             </div>
                                             <button 
                                                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-bold transition-colors"
                                                 onClick={() => {
-                                                    // Simple download/view simulation
-                                                    const blob = new Blob([doc.content], { type: 'text/markdown' });
+                                                    const blob = new Blob([content], { type: 'text/markdown' });
                                                     const url = URL.createObjectURL(blob);
                                                     window.open(url, '_blank');
                                                 }}
@@ -640,10 +718,11 @@ export const ProjectDetails = () => {
                                             </button>
                                         </div>
                                         <div className="bg-gray-900 p-4 rounded h-64 overflow-y-auto font-mono text-sm text-gray-300 whitespace-pre-wrap">
-                                            {doc.content}
+                                            {content}
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
                              <div className="text-center py-12 bg-gray-800 rounded border border-dashed border-gray-600">
@@ -653,6 +732,7 @@ export const ProjectDetails = () => {
                         )}
                     </div>
                 );
+            }
             default:
                 return null;
         }

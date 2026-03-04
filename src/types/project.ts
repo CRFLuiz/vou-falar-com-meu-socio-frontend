@@ -12,15 +12,15 @@ export interface DiscoveryData {
     migration_required: boolean;
   };
   non_functional: {
-    performance: any;
-    availability: any;
-    security: any;
-    compliance: any;
+    performance: unknown;
+    availability: unknown;
+    security: unknown;
+    compliance: unknown;
   };
-  as_is: any;
-  constraints: any;
+  as_is: unknown;
+  constraints: unknown;
   inferred_signals: string[];
-  missing_information: any[];
+  missing_information: unknown[];
   confidence_score: number;
   estimation_risk: string;
 }
@@ -39,12 +39,12 @@ export interface RiskAnalysisData {
 
 export interface ArchitectureData {
   selected_pattern: string;
-  availability_strategy: any;
+  availability_strategy: unknown;
   deployment_strategy: string;
   environments: string[];
-  observability_stack: any;
-  security: any;
-  disaster_recovery: any;
+  observability_stack: unknown;
+  security: unknown;
+  disaster_recovery: unknown;
   overall_architecture_complexity: number;
   decision_log: string[];
 }
@@ -58,12 +58,12 @@ export interface EngineeringData {
   dr_tasks: number;
   raw_complexity_score: number;
   adjusted_complexity_score: number;
-  recommended_team_profile: any;
-  tasks: any[];
+  recommended_team_profile: Record<string, unknown>;
+  tasks: unknown[];
 }
 
 export interface RiskIntelData {
-  risk_matrix: any[];
+  risk_matrix: unknown[];
   overall_project_risk_score: number;
   overall_risk_level: string;
   risk_effort_multiplier: number;
@@ -74,8 +74,8 @@ export interface EstimationData {
   total_hours: number;
   confidence_range: string;
   risk_level: string;
-  effort_distribution: any;
-  recommended_team: any;
+  effort_distribution: Record<string, unknown>;
+  recommended_team: Record<string, unknown>;
 }
 
 export interface DocumentsData {

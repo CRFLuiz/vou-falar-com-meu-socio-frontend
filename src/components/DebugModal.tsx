@@ -4,7 +4,7 @@ interface DebugModalProps {
     isOpen: boolean;
     onClose: () => void;
     title: string;
-    data: any;
+    data: unknown;
 }
 
 export const DebugModal: React.FC<DebugModalProps> = ({ isOpen, onClose, title, data }) => {
