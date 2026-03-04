@@ -1,11 +1,12 @@
 import { MainLayout } from '../layouts/MainLayout';
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Project } from '../types/project';
 
 type Phase = 'reconnaissance' | 'hat_trick' | 'delivery';
 type Tab = 'discovery' | 'risk' | 'architecture' | 'engineering' | 'risk_intel' | 'estimation' | 'documents';
+type ChatMessage = { id: string; role: 'system' | 'user'; text: string };
 
 const phases: { id: Phase; label: string }[] = [
     { id: 'reconnaissance', label: 'Reconnaissance and Discovery' },
@@ -32,6 +33,57 @@ export const ProjectDetails = () => {
     const [activeTab, setActiveTab] = useState<Tab>('discovery');
     const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [projectDescriptionMessage, setProjectDescriptionMessage] = useState('');
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
+        {
+            id: 'system-1',
+            role: 'system',
+            text: 'Posso prosseguir com a geração do Structured Discovery ou você gostaria de acrescentar mais alguma informação antes de gerar o conteúdo?',
+        },
+    ]);
+    const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    }, [chatMessages.length]);
+
+    const handleSendChatMessage = () => {
+        const text = projectDescriptionMessage.trim();
+        if (!text) return;
+
+        setChatMessages(prev => [
+            ...prev,
+            {
+                id: `user-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                role: 'user',
+                text,
+            },
+        ]);
+        setProjectDescriptionMessage('');
+    };
+
+    const normalizeDocumentContentForDisplay = (text: string) => {
+        const normalized = String(text ?? '').replace(/\r\n/g, '\n');
+        const lines = normalized.split('\n');
+        const nonEmpty = lines.filter(line => line.trim().length > 0);
+        const indents = nonEmpty.map(line => (line.match(/^[ \t]*/)?.[0].length ?? 0));
+        const minIndent = indents.length > 0 ? Math.min(...indents) : 0;
+
+        if (minIndent <= 0) return normalized;
+
+        return lines
+            .map(line => {
+                const prefixLen = line.match(/^[ \t]*/)?.[0].length ?? 0;
+                const cut = Math.min(prefixLen, minIndent);
+                return line.slice(cut);
+            })
+            .join('\n');
+    };
+
+    const normalizeProjectDescriptionForDisplay = (text: string) => {
+        const normalized = String(text ?? '').replace(/\r\n/g, '\n');
+        return normalized.replace(/\n\n---\n###\s+Extracted Metadata[\s\S]*$/i, '').trim();
+    };
 
     const handlePhaseChange = (phaseId: Phase) => {
         setActivePhase(phaseId);
@@ -189,107 +241,157 @@ export const ProjectDetails = () => {
 
         switch (activeTab) {
             case 'discovery': {
-                const dData = project.discovery_data;
-                const discoverySummaryItems = [
-                    t('project_details_discovery_summary_item_1'),
-                    t('project_details_discovery_summary_item_2'),
-                    t('project_details_discovery_summary_item_3'),
-                    t('project_details_discovery_summary_item_4'),
-                    t('project_details_discovery_summary_item_5'),
-                ];
+                const description = normalizeProjectDescriptionForDisplay(project.description);
+                const discoveryData = project.discovery_data;
                 return (
-                    <div>
-                        <div className="flex justify-between items-center mb-6">
-                            <div>
-                                <h3 className="text-2xl font-bold text-white">Structured Discovery</h3>
-                                <p className="text-gray-400">Analysis of business context and requirements</p>
-                            </div>
-                            {renderGenerateButton('Discovery Data', 'discovery')}
-                        </div>
-
-                        {!dData && (
-                            <>
-                                <SectionCard title={t('project_details_discovery_summary_title')}>
-                                    <p className="text-gray-300 leading-relaxed mb-3">{t('project_details_discovery_summary_intro')}</p>
-                                    <ListDisplay items={discoverySummaryItems} />
-                                </SectionCard>
-                                <SectionCard title="Project Description">
-                                    <p className="text-gray-300 leading-relaxed">{project.description}</p>
-                                </SectionCard>
-                            </>
-                        )}
-
-                        {dData ? (
-                            <div
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div
+                            style={{
+                                textAlign: 'left',
+                                backgroundColor: 'rgba(15, 15, 35, 0.55)',
+                                border: '1px solid rgba(0, 0, 0, 0.85)',
+                                borderRadius: '10px 10px 0 0',
+                                padding: '16px',
+                                maxHeight: '30vh',
+                                overflowY: 'auto',
+                            }}
+                        >
+                            <h3
                                 style={{
-                                    maxWidth: '1100px',
-                                    margin: '0 auto',
-                                    padding: '1.5rem',
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '12px',
-                                    background: 'rgba(0, 0, 0, 0.25)',
+                                    marginTop: 0,
+                                    marginBottom: '12px',
+                                    fontSize: '1.25rem',
+                                    fontWeight: 800,
+                                    color: 'var(--primary-cyan)',
                                 }}
                             >
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    <SectionCard title="Business Context">
-                                        <KeyValue label="Objective" value={dData.business?.objective} />
-                                        <KeyValue label="Initiative Type" value={dData.business?.initiative_type} />
-                                        <KeyValue label="Target Deadline" value={dData.business?.deadline} />
-                                        <KeyValue label="Criticality" value={dData.business?.criticality} />
-                                    </SectionCard>
+                                {t('project_details_project_description_title')}
+                            </h3>
+                            <div style={{ color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>{description}</div>
+                        </div>
 
-                                    <SectionCard title="Analysis Metrics">
-                                        <div className="flex items-center gap-4 mb-4">
-                                            <div className="text-center p-3 bg-gray-700 rounded-lg min-w-[100px]">
-                                                <div className="text-2xl font-bold text-cyan-400">{dData.confidence_score}%</div>
-                                                <div className="text-xs text-gray-400">Confidence</div>
-                                            </div>
-                                            <div className="text-center p-3 bg-gray-700 rounded-lg min-w-[100px]">
-                                                <div className={`text-xl font-bold ${dData.estimation_risk === 'High' ? 'text-red-400' : 'text-green-400'}`}>
-                                                    {dData.estimation_risk}
-                                                </div>
-                                                <div className="text-xs text-gray-400">Risk Level</div>
+                        <div
+                            style={{
+                                height: '40vh',
+                                backgroundColor: 'rgb(15, 15, 35)',
+                                border: '1px solid rgba(0, 0, 0, 0.85)',
+                                borderTop: '2px solid rgba(0, 255, 255, 0.55)',
+                                borderBottom: '2px solid rgba(0, 255, 255, 0.55)',
+                                borderRadius: '0 0 10px 10px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    flex: 1,
+                                    overflowY: 'auto',
+                                    padding: '12px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '10px',
+                                }}
+                            >
+                                {chatMessages.map(message => {
+                                    const isSystem = message.role === 'system';
+                                    return (
+                                        <div
+                                            key={message.id}
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: isSystem ? 'flex-end' : 'flex-start',
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    maxWidth: '80%',
+                                                    padding: '10px 12px',
+                                                    borderRadius: '12px',
+                                                    backgroundColor: isSystem ? 'rgba(0, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.08)',
+                                                    border: isSystem ? '1px solid rgba(0, 255, 255, 0.25)' : '1px solid rgba(0, 0, 0, 0.55)',
+                                                    color: 'var(--text-primary)',
+                                                    whiteSpace: 'pre-wrap',
+                                                    lineHeight: 1.35,
+                                                }}
+                                            >
+                                                {message.text}
                                             </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <h5 className="text-sm font-semibold text-gray-300">Inferred Signals:</h5>
-                                            <div className="flex flex-wrap gap-2">
-                                                {dData.inferred_signals?.map((sig: string, i: number) => (
-                                                    <span key={i} className="px-2 py-1 bg-gray-700 text-xs rounded text-cyan-200 border border-cyan-900">{sig}</span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </SectionCard>
+                                    );
+                                })}
+                                <div ref={chatEndRef} />
+                            </div>
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    padding: '12px',
+                                    borderTop: '1px solid rgba(0, 0, 0, 0.65)',
+                                }}
+                            >
+                                <input
+                                    value={projectDescriptionMessage}
+                                    onChange={(e) => setProjectDescriptionMessage(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleSendChatMessage();
+                                        }
+                                    }}
+                                    placeholder="Digite aqui..."
+                                    style={{
+                                        flex: 1,
+                                        height: '40px',
+                                        padding: '0 12px',
+                                        borderRadius: '8px',
+                                        border: '1px solid rgba(0, 0, 0, 0.65)',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.25)',
+                                        color: 'var(--text-primary)',
+                                        outline: 'none',
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleSendChatMessage}
+                                    disabled={!projectDescriptionMessage.trim()}
+                                    style={{
+                                        height: '40px',
+                                        padding: '0 14px',
+                                        borderRadius: '8px',
+                                        border: '1px solid rgba(0, 0, 0, 0.65)',
+                                        backgroundColor: 'var(--primary-cyan)',
+                                        color: '#000',
+                                        fontWeight: 800,
+                                        cursor: projectDescriptionMessage.trim() ? 'pointer' : 'not-allowed',
+                                        opacity: projectDescriptionMessage.trim() ? 1 : 0.6,
+                                    }}
+                                >
+                                    Enviar
+                                </button>
+                            </div>
+                        </div>
 
-                                    <SectionCard title="Functional Scope">
-                                        <div className="mb-4">
-                                            <h5 className="text-sm font-semibold text-gray-300 mb-2">Build Items:</h5>
-                                            <ListDisplay items={dData.functional_scope?.build_items} />
-                                        </div>
-                                        <div>
-                                            <h5 className="text-sm font-semibold text-gray-300 mb-2">Integrations:</h5>
-                                            <ListDisplay items={dData.functional_scope?.integrations} />
-                                        </div>
-                                    </SectionCard>
-
-                                    <SectionCard title="Non-Functional Requirements">
-                                        {Object.entries(dData.non_functional || {}).map(([key, val]) => (
-                                            <div key={key} className="mb-3">
-                                                <h5 className="text-sm font-semibold text-gray-300 capitalize mb-1">{key}:</h5>
-                                                <p className="text-sm text-gray-400 bg-gray-900 p-2 rounded border border-gray-700">
-                                                    {JSON.stringify(val)}
-                                                </p>
-                                            </div>
-                                        ))}
-                                    </SectionCard>
+                        <div
+                            style={{
+                                textAlign: 'left',
+                                backgroundColor: 'rgba(15, 15, 35, 0.55)',
+                                border: '1px solid rgba(0, 0, 0, 0.85)',
+                                borderRadius: '10px',
+                                padding: '16px',
+                            }}
+                        >
+                            {!discoveryData ? (
+                                <div style={{ color: 'rgba(255, 255, 255, 0.75)' }}>
+                                    Ainda não foi gerado nenhum conteúdo do Structured Discovery.
                                 </div>
-                            </div>
-                        ) : (
-                            <div className="text-center py-12 bg-gray-800 rounded border border-dashed border-gray-600">
-                                <p className="text-gray-400 mb-4">No discovery data generated yet.</p>
-                                <p className="text-sm text-gray-500">Click the generate button above to analyze the project description.</p>
-                            </div>
-                        )}
+                            ) : (
+                                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--text-primary)' }}>
+                                    {JSON.stringify(discoveryData, null, 2)}
+                                </pre>
+                            )}
+                        </div>
                     </div>
                 );
             }
@@ -698,6 +800,7 @@ export const ProjectDetails = () => {
                                     const audience = typeof d.audience === 'string' ? d.audience : '';
                                     const format = typeof d.format === 'string' ? d.format : '';
                                     const content = typeof d.content === 'string' ? d.content : '';
+                                    const displayContent = normalizeDocumentContentForDisplay(content);
 
                                     return (
                                         <div key={i} className="bg-gray-800 p-6 rounded border border-gray-700">
@@ -717,8 +820,8 @@ export const ProjectDetails = () => {
                                                 Download / View
                                             </button>
                                         </div>
-                                        <div className="bg-gray-900 p-4 rounded h-64 overflow-y-auto font-mono text-sm text-gray-300 whitespace-pre-wrap">
-                                            {content}
+                                        <div className="bg-gray-900 p-4 rounded h-64 overflow-y-auto font-mono text-sm text-gray-300 whitespace-pre-wrap" style={{ textAlign: 'left' }}>
+                                            {displayContent}
                                         </div>
                                     </div>
                                     );
@@ -823,7 +926,7 @@ export const ProjectDetails = () => {
                         ))}
                     </div>
 
-                    <div className="project-content" style={{ background: 'var(--card-bg)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-color)', minHeight: '400px' }}>
+                    <div className="project-content" style={{ background: 'var(--card-bg)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-color)', minHeight: '400px', textAlign: 'left' }}>
                         {renderTabContent()}
                     </div>
                 </div>
