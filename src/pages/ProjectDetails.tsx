@@ -7,6 +7,12 @@ import type { Project } from '../types/project';
 type Phase = 'reconnaissance' | 'hat_trick' | 'delivery';
 type Tab = 'discovery' | 'risk' | 'architecture' | 'engineering' | 'risk_intel' | 'estimation' | 'documents';
 type ChatMessage = { id: string; role: 'system' | 'user'; text: string };
+type DiscoverySocketMessage = {
+    type: string;
+    message?: string;
+    project?: Project;
+    intent?: string;
+};
 
 const phases: { id: Phase; label: string }[] = [
     { id: 'reconnaissance', label: 'Reconnaissance and Discovery' },
@@ -42,6 +48,12 @@ export const ProjectDetails = () => {
         },
     ]);
     const chatEndRef = useRef<HTMLDivElement | null>(null);
+    const discoverySocketRef = useRef<WebSocket | null>(null);
+    const [isDiscoverySocketConnected, setIsDiscoverySocketConnected] = useState(false);
+    const isDiscoverySocketClosingRef = useRef(false);
+    const userStr = localStorage.getItem('vfcs_auth_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const userId = user && user.id ? String(user.id) : '';
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
@@ -50,7 +62,14 @@ export const ProjectDetails = () => {
     const handleSendChatMessage = () => {
         const text = projectDescriptionMessage.trim();
         if (!text) return;
+        if (!id) return;
+        const socket = discoverySocketRef.current;
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            console.error('[DiscoveryChat] WebSocket indisponível para envio de mensagem');
+            return;
+        }
 
+        console.log('[DiscoveryChat] Enviando mensagem do usuário via WebSocket', text);
         setChatMessages(prev => [
             ...prev,
             {
@@ -59,6 +78,12 @@ export const ProjectDetails = () => {
                 text,
             },
         ]);
+        socket.send(JSON.stringify({
+            type: 'discovery_chat_user_message',
+            projectId: id,
+            userId,
+            message: text,
+        }));
         setProjectDescriptionMessage('');
     };
 
@@ -110,6 +135,12 @@ export const ProjectDetails = () => {
         }
         return `${protocol}//api.${host}`;
     }, []);
+
+    const discoveryWsUrl = useMemo(() => {
+        if (apiBaseUrl.startsWith('https://')) return `${apiBaseUrl.replace('https://', 'wss://')}/ws/discovery`;
+        if (apiBaseUrl.startsWith('http://')) return `${apiBaseUrl.replace('http://', 'ws://')}/ws/discovery`;
+        return `${apiBaseUrl}/ws/discovery`;
+    }, [apiBaseUrl]);
 
     const fetchProject = useCallback(async () => {
         if (!id) return;
@@ -177,6 +208,96 @@ export const ProjectDetails = () => {
     useEffect(() => {
         void fetchProject();
     }, [fetchProject]);
+
+    useEffect(() => {
+        if (!id) return;
+        console.log('[DiscoveryChat] Iniciando conexão WebSocket', discoveryWsUrl);
+        isDiscoverySocketClosingRef.current = false;
+        const socket = new WebSocket(discoveryWsUrl);
+        discoverySocketRef.current = socket;
+
+        socket.onopen = () => {
+            if (discoverySocketRef.current !== socket) return;
+            console.log('[DiscoveryChat] WebSocket conectado');
+            setIsDiscoverySocketConnected(true);
+        };
+
+        socket.onmessage = (event) => {
+            const raw = String(event.data ?? '');
+            console.log('[DiscoveryChat] Mensagem recebida', raw);
+            try {
+                const payload = JSON.parse(raw) as DiscoverySocketMessage;
+                if (payload.type === 'assistant_message' && payload.message) {
+                    setChatMessages(prev => [
+                        ...prev,
+                        {
+                            id: `system-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                            role: 'system',
+                            text: payload.message ?? '',
+                        },
+                    ]);
+                }
+                if (payload.type === 'project_updated' && payload.project) {
+                    console.log('[DiscoveryChat] Projeto atualizado pela LLM');
+                    setProject(payload.project);
+                }
+                if (payload.type === 'generation_started') {
+                    console.log('[DiscoveryChat] Geração Structured Discovery iniciada');
+                    setIsGenerating(true);
+                }
+                if (payload.type === 'generation_completed' && payload.project) {
+                    console.log('[DiscoveryChat] Geração Structured Discovery concluída');
+                    setProject(payload.project);
+                    setIsGenerating(false);
+                }
+                if (payload.type === 'processing_started') {
+                    setIsGenerating(true);
+                }
+                if (payload.type === 'processing_finished') {
+                    setIsGenerating(false);
+                }
+                if (payload.type === 'error' && payload.message) {
+                    console.error('[DiscoveryChat] Erro recebido do backend', payload.message);
+                    setChatMessages(prev => [
+                        ...prev,
+                        {
+                            id: `system-error-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                            role: 'system',
+                            text: payload.message ?? 'Falha ao processar mensagem.',
+                        },
+                    ]);
+                }
+            } catch (error) {
+                console.error('[DiscoveryChat] Falha ao interpretar payload WebSocket', error);
+            }
+        };
+
+        socket.onerror = (error) => {
+            if (isDiscoverySocketClosingRef.current || discoverySocketRef.current !== socket) {
+                return;
+            }
+            console.error('[DiscoveryChat] Erro na conexão WebSocket', error);
+        };
+
+        socket.onclose = () => {
+            if (discoverySocketRef.current !== socket) {
+                return;
+            }
+            console.log('[DiscoveryChat] WebSocket desconectado');
+            setIsDiscoverySocketConnected(false);
+            discoverySocketRef.current = null;
+        };
+
+        return () => {
+            console.log('[DiscoveryChat] Finalizando conexão WebSocket');
+            isDiscoverySocketClosingRef.current = true;
+            if (discoverySocketRef.current === socket) {
+                setIsDiscoverySocketConnected(false);
+                discoverySocketRef.current = null;
+            }
+            socket.close();
+        };
+    }, [discoveryWsUrl, id]);
 
     const renderTabContent = () => {
         if (!project) return null;
@@ -355,7 +476,7 @@ export const ProjectDetails = () => {
                                 <button
                                     type="button"
                                     onClick={handleSendChatMessage}
-                                    disabled={!projectDescriptionMessage.trim()}
+                                    disabled={!projectDescriptionMessage.trim() || !isDiscoverySocketConnected}
                                     style={{
                                         height: '40px',
                                         padding: '0 14px',
@@ -364,8 +485,8 @@ export const ProjectDetails = () => {
                                         backgroundColor: 'var(--primary-cyan)',
                                         color: '#000',
                                         fontWeight: 800,
-                                        cursor: projectDescriptionMessage.trim() ? 'pointer' : 'not-allowed',
-                                        opacity: projectDescriptionMessage.trim() ? 1 : 0.6,
+                                        cursor: projectDescriptionMessage.trim() && isDiscoverySocketConnected ? 'pointer' : 'not-allowed',
+                                        opacity: projectDescriptionMessage.trim() && isDiscoverySocketConnected ? 1 : 0.6,
                                     }}
                                 >
                                     Enviar

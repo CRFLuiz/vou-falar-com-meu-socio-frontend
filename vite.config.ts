@@ -16,6 +16,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://backend:3000',
+        ws: true,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       }
