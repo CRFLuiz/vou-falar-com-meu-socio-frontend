@@ -149,7 +149,7 @@ export const ProjectDetails = () => {
             const userStr = localStorage.getItem('vfcs_auth_user');
             const user = userStr ? JSON.parse(userStr) : null;
             const headers: Record<string, string> = {};
-            
+
             if (user && user.id) {
                 headers['x-user-id'] = String(user.id);
             }
@@ -193,13 +193,25 @@ export const ProjectDetails = () => {
                 const updatedProject = await response.json();
                 setProject(updatedProject);
             } else {
-                const errorData = await response.json();
-                console.error(`Failed to generate ${stageName}:`, errorData);
-                alert(`Failed to generate ${stageName}: ${errorData.message || 'Unknown error'}`);
+                const errorText = await response.text();
+                let message = 'Unknown error';
+                try {
+                    const parsed = JSON.parse(errorText) as { message?: unknown };
+                    if (typeof parsed?.message === 'string' && parsed.message.trim().length > 0) {
+                        message = parsed.message;
+                    }
+                } catch {
+                    if (errorText.trim().length > 0) {
+                        message = errorText.trim();
+                    }
+                }
+                console.error(`Failed to generate ${stageName}:`, errorText);
+                alert(`Failed to generate ${stageName}: ${message}`);
             }
         } catch (error) {
             console.error(`Error generating ${stageName}:`, error);
-            alert(`Error generating ${stageName}`);
+            const message = error instanceof Error ? error.message : String(error);
+            alert(`Error generating ${stageName}: ${message}`);
         } finally {
             setIsGenerating(false);
         }
@@ -303,7 +315,7 @@ export const ProjectDetails = () => {
         if (!project) return null;
 
         const renderGenerateButton = (label: string, endpoint: string, disabled: boolean = false, disabledReason?: string) => (
-            <div className="mb-4">
+            <div style={{ marginBottom: '0.75rem' }}>
                 <button
                     onClick={() => generateStage(label, endpoint)}
                     disabled={disabled || isGenerating}
@@ -318,7 +330,7 @@ export const ProjectDetails = () => {
                         opacity: disabled ? 0.7 : 1,
                     }}
                 >
-                    {isGenerating ? 'Processing...' : `Generate ${label}`}
+                    {isGenerating ? t('project_details_processing') : `${t('project_details_generate')} ${label}`}
                 </button>
                 {disabled && disabledReason && (
                     <p className="text-sm text-yellow-500 mt-2">⚠️ {disabledReason}</p>
@@ -359,6 +371,49 @@ export const ProjectDetails = () => {
                 {items?.map((item, idx) => <li key={idx}>{item}</li>)}
             </ul>
         );
+
+        type EngineeringTask = { name: string; domain: string; complexity: string };
+        type RiskMatrixItem = {
+            description: string;
+            category: string;
+            probability: string;
+            impact: string;
+            mitigation: string;
+        };
+        type DocumentItem = { type: string; audience: string; format: string; content: string };
+
+        const toRecord = (value: unknown): Record<string, unknown> =>
+            typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+
+        const toEngineeringTask = (task: unknown): EngineeringTask => {
+            const t = toRecord(task);
+            return {
+                name: typeof t.name === 'string' ? t.name : '',
+                domain: typeof t.domain === 'string' ? t.domain : '',
+                complexity: typeof t.complexity === 'string' ? t.complexity : String(t.complexity ?? ''),
+            };
+        };
+
+        const toRiskMatrixItem = (risk: unknown): RiskMatrixItem => {
+            const r = toRecord(risk);
+            return {
+                description: typeof r.description === 'string' ? r.description : '',
+                category: typeof r.category === 'string' ? r.category : '',
+                probability: typeof r.probability === 'string' ? r.probability : String(r.probability ?? ''),
+                impact: typeof r.impact === 'string' ? r.impact : String(r.impact ?? ''),
+                mitigation: typeof r.mitigation === 'string' ? r.mitigation : '',
+            };
+        };
+
+        const toDocumentItem = (doc: unknown): DocumentItem => {
+            const d = toRecord(doc);
+            return {
+                type: typeof d.type === 'string' ? d.type : 'document',
+                audience: typeof d.audience === 'string' ? d.audience : '',
+                format: typeof d.format === 'string' ? d.format : '',
+                content: typeof d.content === 'string' ? d.content : '',
+            };
+        };
 
         switch (activeTab) {
             case 'discovery': {
