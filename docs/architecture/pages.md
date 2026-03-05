@@ -43,6 +43,7 @@
 - Organized into phases: Reconnaissance, Hat-Trick, Delivery.
 - Contains tabs for various project modules (Discovery, Architecture, Engineering, etc.).
 - Allows generating project stages via AI.
+- The Structured Discovery tab includes: a scrollable project description panel (left-aligned), a 40vh chat panel, and the generated discovery output (or an empty-state warning). The discovery output is currently rendered as pretty-printed JSON.
 
 ## Settings
 `src/pages/Settings.tsx`

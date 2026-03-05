@@ -1,11 +1,18 @@
 import { MainLayout } from '../layouts/MainLayout';
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Project } from '../types/project';
 
 type Phase = 'reconnaissance' | 'hat_trick' | 'delivery';
 type Tab = 'discovery' | 'risk' | 'architecture' | 'engineering' | 'risk_intel' | 'estimation' | 'documents';
+type ChatMessage = { id: string; role: 'system' | 'user'; text: string };
+type DiscoverySocketMessage = {
+    type: string;
+    message?: string;
+    project?: Project;
+    intent?: string;
+};
 
 const phases: { id: Phase; label: string }[] = [
     { id: 'reconnaissance', label: 'Reconnaissance and Discovery' },
@@ -32,6 +39,76 @@ export const ProjectDetails = () => {
     const [activeTab, setActiveTab] = useState<Tab>('discovery');
     const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [projectDescriptionMessage, setProjectDescriptionMessage] = useState('');
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
+        {
+            id: 'system-1',
+            role: 'system',
+            text: 'Posso prosseguir com a geração do Structured Discovery ou você gostaria de acrescentar mais alguma informação antes de gerar o conteúdo?',
+        },
+    ]);
+    const chatEndRef = useRef<HTMLDivElement | null>(null);
+    const discoverySocketRef = useRef<WebSocket | null>(null);
+    const [isDiscoverySocketConnected, setIsDiscoverySocketConnected] = useState(false);
+    const isDiscoverySocketClosingRef = useRef(false);
+    const userStr = localStorage.getItem('vfcs_auth_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const userId = user && user.id ? String(user.id) : '';
+
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    }, [chatMessages.length]);
+
+    const handleSendChatMessage = () => {
+        const text = projectDescriptionMessage.trim();
+        if (!text) return;
+        if (!id) return;
+        const socket = discoverySocketRef.current;
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            console.error('[DiscoveryChat] WebSocket indisponível para envio de mensagem');
+            return;
+        }
+
+        console.log('[DiscoveryChat] Enviando mensagem do usuário via WebSocket', text);
+        setChatMessages(prev => [
+            ...prev,
+            {
+                id: `user-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                role: 'user',
+                text,
+            },
+        ]);
+        socket.send(JSON.stringify({
+            type: 'discovery_chat_user_message',
+            projectId: id,
+            userId,
+            message: text,
+        }));
+        setProjectDescriptionMessage('');
+    };
+
+    const normalizeDocumentContentForDisplay = (text: string) => {
+        const normalized = String(text ?? '').replace(/\r\n/g, '\n');
+        const lines = normalized.split('\n');
+        const nonEmpty = lines.filter(line => line.trim().length > 0);
+        const indents = nonEmpty.map(line => (line.match(/^[ \t]*/)?.[0].length ?? 0));
+        const minIndent = indents.length > 0 ? Math.min(...indents) : 0;
+
+        if (minIndent <= 0) return normalized;
+
+        return lines
+            .map(line => {
+                const prefixLen = line.match(/^[ \t]*/)?.[0].length ?? 0;
+                const cut = Math.min(prefixLen, minIndent);
+                return line.slice(cut);
+            })
+            .join('\n');
+    };
+
+    const normalizeProjectDescriptionForDisplay = (text: string) => {
+        const normalized = String(text ?? '').replace(/\r\n/g, '\n');
+        return normalized.replace(/\n\n---\n###\s+Extracted Metadata[\s\S]*$/i, '').trim();
+    };
 
     const handlePhaseChange = (phaseId: Phase) => {
         setActivePhase(phaseId);
@@ -58,6 +135,12 @@ export const ProjectDetails = () => {
         }
         return `${protocol}//api.${host}`;
     }, []);
+
+    const discoveryWsUrl = useMemo(() => {
+        if (apiBaseUrl.startsWith('https://')) return `${apiBaseUrl.replace('https://', 'wss://')}/ws/discovery`;
+        if (apiBaseUrl.startsWith('http://')) return `${apiBaseUrl.replace('http://', 'ws://')}/ws/discovery`;
+        return `${apiBaseUrl}/ws/discovery`;
+    }, [apiBaseUrl]);
 
     const fetchProject = useCallback(async () => {
         if (!id) return;
@@ -138,6 +221,96 @@ export const ProjectDetails = () => {
         void fetchProject();
     }, [fetchProject]);
 
+    useEffect(() => {
+        if (!id) return;
+        console.log('[DiscoveryChat] Iniciando conexão WebSocket', discoveryWsUrl);
+        isDiscoverySocketClosingRef.current = false;
+        const socket = new WebSocket(discoveryWsUrl);
+        discoverySocketRef.current = socket;
+
+        socket.onopen = () => {
+            if (discoverySocketRef.current !== socket) return;
+            console.log('[DiscoveryChat] WebSocket conectado');
+            setIsDiscoverySocketConnected(true);
+        };
+
+        socket.onmessage = (event) => {
+            const raw = String(event.data ?? '');
+            console.log('[DiscoveryChat] Mensagem recebida', raw);
+            try {
+                const payload = JSON.parse(raw) as DiscoverySocketMessage;
+                if (payload.type === 'assistant_message' && payload.message) {
+                    setChatMessages(prev => [
+                        ...prev,
+                        {
+                            id: `system-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                            role: 'system',
+                            text: payload.message ?? '',
+                        },
+                    ]);
+                }
+                if (payload.type === 'project_updated' && payload.project) {
+                    console.log('[DiscoveryChat] Projeto atualizado pela LLM');
+                    setProject(payload.project);
+                }
+                if (payload.type === 'generation_started') {
+                    console.log('[DiscoveryChat] Geração Structured Discovery iniciada');
+                    setIsGenerating(true);
+                }
+                if (payload.type === 'generation_completed' && payload.project) {
+                    console.log('[DiscoveryChat] Geração Structured Discovery concluída');
+                    setProject(payload.project);
+                    setIsGenerating(false);
+                }
+                if (payload.type === 'processing_started') {
+                    setIsGenerating(true);
+                }
+                if (payload.type === 'processing_finished') {
+                    setIsGenerating(false);
+                }
+                if (payload.type === 'error' && payload.message) {
+                    console.error('[DiscoveryChat] Erro recebido do backend', payload.message);
+                    setChatMessages(prev => [
+                        ...prev,
+                        {
+                            id: `system-error-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                            role: 'system',
+                            text: payload.message ?? 'Falha ao processar mensagem.',
+                        },
+                    ]);
+                }
+            } catch (error) {
+                console.error('[DiscoveryChat] Falha ao interpretar payload WebSocket', error);
+            }
+        };
+
+        socket.onerror = (error) => {
+            if (isDiscoverySocketClosingRef.current || discoverySocketRef.current !== socket) {
+                return;
+            }
+            console.error('[DiscoveryChat] Erro na conexão WebSocket', error);
+        };
+
+        socket.onclose = () => {
+            if (discoverySocketRef.current !== socket) {
+                return;
+            }
+            console.log('[DiscoveryChat] WebSocket desconectado');
+            setIsDiscoverySocketConnected(false);
+            discoverySocketRef.current = null;
+        };
+
+        return () => {
+            console.log('[DiscoveryChat] Finalizando conexão WebSocket');
+            isDiscoverySocketClosingRef.current = true;
+            if (discoverySocketRef.current === socket) {
+                setIsDiscoverySocketConnected(false);
+                discoverySocketRef.current = null;
+            }
+            socket.close();
+        };
+    }, [discoveryWsUrl, id]);
+
     const renderTabContent = () => {
         if (!project) return null;
 
@@ -174,10 +347,21 @@ export const ProjectDetails = () => {
         );
 
         // Helper for key-value display
-        const KeyValue = ({ label, value }: { label: string; value: unknown }) => (
+        const formatValue = (value: unknown) => {
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'string') return value;
+            if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+            try {
+                return JSON.stringify(value);
+            } catch {
+                return String(value);
+            }
+        };
+
+        const KeyValue = ({ label, value }: { label: string, value: unknown }) => (
             <div className="mb-2 grid grid-cols-1 md:grid-cols-3 gap-2 border-b border-gray-700 pb-2 last:border-0">
                 <span className="text-gray-400 font-medium">{label}:</span>
-                <span className="md:col-span-2 text-gray-100">{String(value)}</span>
+                <span className="md:col-span-2 text-gray-100">{formatValue(value)}</span>
             </div>
         );
 
@@ -233,126 +417,157 @@ export const ProjectDetails = () => {
 
         switch (activeTab) {
             case 'discovery': {
-                const dData = project.discovery_data;
-                const discoverySummaryItems = [
-                    t('project_details_discovery_summary_item_1'),
-                    t('project_details_discovery_summary_item_2'),
-                    t('project_details_discovery_summary_item_3'),
-                    t('project_details_discovery_summary_item_4'),
-                    t('project_details_discovery_summary_item_5'),
-                ];
-                const discoveryTitle = t('project_details_discovery_title');
-                const discoverySubtitle = t('project_details_discovery_subtitle');
-                const discoveryGenerateLabel = t('project_details_discovery_generate_label');
+                const description = normalizeProjectDescriptionForDisplay(project.description);
+                const discoveryData = project.discovery_data;
                 return (
-                    <div>
-                        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                                {discoveryTitle}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div
+                            style={{
+                                textAlign: 'left',
+                                backgroundColor: 'rgba(15, 15, 35, 0.55)',
+                                border: '1px solid rgba(0, 0, 0, 0.85)',
+                                borderRadius: '10px 10px 0 0',
+                                padding: '16px',
+                                maxHeight: '30vh',
+                                overflowY: 'auto',
+                            }}
+                        >
+                            <h3
+                                style={{
+                                    marginTop: 0,
+                                    marginBottom: '12px',
+                                    fontSize: '1.25rem',
+                                    fontWeight: 800,
+                                    color: 'var(--primary-cyan)',
+                                }}
+                            >
+                                {t('project_details_project_description_title')}
                             </h3>
-                            <p style={{ margin: '0.4rem 0 1.25rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                                {discoverySubtitle}
-                            </p>
-                            <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                {renderGenerateButton(discoveryGenerateLabel, 'discovery')}
+                            <div style={{ color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>{description}</div>
+                        </div>
+
+                        <div
+                            style={{
+                                height: '40vh',
+                                backgroundColor: 'rgb(15, 15, 35)',
+                                border: '1px solid rgba(0, 0, 0, 0.85)',
+                                borderTop: '2px solid rgba(0, 255, 255, 0.55)',
+                                borderBottom: '2px solid rgba(0, 255, 255, 0.55)',
+                                borderRadius: '0 0 10px 10px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    flex: 1,
+                                    overflowY: 'auto',
+                                    padding: '12px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '10px',
+                                }}
+                            >
+                                {chatMessages.map(message => {
+                                    const isSystem = message.role === 'system';
+                                    return (
+                                        <div
+                                            key={message.id}
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: isSystem ? 'flex-end' : 'flex-start',
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    maxWidth: '80%',
+                                                    padding: '10px 12px',
+                                                    borderRadius: '12px',
+                                                    backgroundColor: isSystem ? 'rgba(0, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.08)',
+                                                    border: isSystem ? '1px solid rgba(0, 255, 255, 0.25)' : '1px solid rgba(0, 0, 0, 0.55)',
+                                                    color: 'var(--text-primary)',
+                                                    whiteSpace: 'pre-wrap',
+                                                    lineHeight: 1.35,
+                                                }}
+                                            >
+                                                {message.text}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                <div ref={chatEndRef} />
+                            </div>
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    padding: '12px',
+                                    borderTop: '1px solid rgba(0, 0, 0, 0.65)',
+                                }}
+                            >
+                                <input
+                                    value={projectDescriptionMessage}
+                                    onChange={(e) => setProjectDescriptionMessage(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleSendChatMessage();
+                                        }
+                                    }}
+                                    placeholder="Digite aqui..."
+                                    style={{
+                                        flex: 1,
+                                        height: '40px',
+                                        padding: '0 12px',
+                                        borderRadius: '8px',
+                                        border: '1px solid rgba(0, 0, 0, 0.65)',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.25)',
+                                        color: 'var(--text-primary)',
+                                        outline: 'none',
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleSendChatMessage}
+                                    disabled={!projectDescriptionMessage.trim() || !isDiscoverySocketConnected}
+                                    style={{
+                                        height: '40px',
+                                        padding: '0 14px',
+                                        borderRadius: '8px',
+                                        border: '1px solid rgba(0, 0, 0, 0.65)',
+                                        backgroundColor: 'var(--primary-cyan)',
+                                        color: '#000',
+                                        fontWeight: 800,
+                                        cursor: projectDescriptionMessage.trim() && isDiscoverySocketConnected ? 'pointer' : 'not-allowed',
+                                        opacity: projectDescriptionMessage.trim() && isDiscoverySocketConnected ? 1 : 0.6,
+                                    }}
+                                >
+                                    Enviar
+                                </button>
                             </div>
                         </div>
 
                         <div
                             style={{
-                                maxWidth: '920px',
-                                margin: '0 auto 2.75rem',
-                                padding: '1.5rem',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '12px',
-                                background: 'rgba(0, 0, 0, 0.25)',
+                                textAlign: 'left',
+                                backgroundColor: 'rgba(15, 15, 35, 0.55)',
+                                border: '1px solid rgba(0, 0, 0, 0.85)',
+                                borderRadius: '10px',
+                                padding: '16px',
                             }}
                         >
-                            <h4
-                                style={{
-                                    margin: 0,
-                                    marginBottom: '0.75rem',
-                                    color: 'var(--primary-cyan)',
-                                    fontSize: '0.95rem',
-                                    letterSpacing: '0.12em',
-                                    textTransform: 'uppercase',
-                                }}
-                            >
-                                {t('project_details_discovery_summary_title')}
-                            </h4>
-                            <p style={{ margin: 0, marginBottom: '1rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                                {t('project_details_discovery_summary_intro')}
-                            </p>
-                            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: '0.75rem' }}>
-                                {discoverySummaryItems.map((item, idx) => (
-                                    <li key={idx} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', lineHeight: 1.6 }}>
-                                        <span style={{ color: 'var(--primary-cyan)', fontWeight: 800, marginTop: '0.05rem' }}>•</span>
-                                        <span style={{ color: 'var(--text-primary)' }}>{item}</span>
-                                    </li>
-                                ))}
-                            </ul>
+                            {!discoveryData ? (
+                                <div style={{ color: 'rgba(255, 255, 255, 0.75)' }}>
+                                    Ainda não foi gerado nenhum conteúdo do Structured Discovery.
+                                </div>
+                            ) : (
+                                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--text-primary)' }}>
+                                    {JSON.stringify(discoveryData, null, 2)}
+                                </pre>
+                            )}
                         </div>
-
-                        {dData ? (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <SectionCard title="Business Context">
-                                    <KeyValue label="Objective" value={dData.business?.objective} />
-                                    <KeyValue label="Initiative Type" value={dData.business?.initiative_type} />
-                                    <KeyValue label="Target Deadline" value={dData.business?.deadline} />
-                                    <KeyValue label="Criticality" value={dData.business?.criticality} />
-                                </SectionCard>
-
-                                <SectionCard title="Analysis Metrics">
-                                    <div className="flex items-center gap-4 mb-4">
-                                        <div className="text-center p-3 bg-gray-700 rounded-lg min-w-[100px]">
-                                            <div className="text-2xl font-bold text-cyan-400">{dData.confidence_score}%</div>
-                                            <div className="text-xs text-gray-400">Confidence</div>
-                                        </div>
-                                        <div className="text-center p-3 bg-gray-700 rounded-lg min-w-[100px]">
-                                            <div className={`text-xl font-bold ${dData.estimation_risk === 'High' ? 'text-red-400' : 'text-green-400'}`}>
-                                                {dData.estimation_risk}
-                                            </div>
-                                            <div className="text-xs text-gray-400">Risk Level</div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <h5 className="text-sm font-semibold text-gray-300">Inferred Signals:</h5>
-                                        <div className="flex flex-wrap gap-2">
-                                            {dData.inferred_signals?.map((sig: string, i: number) => (
-                                                <span key={i} className="px-2 py-1 bg-gray-700 text-xs rounded text-cyan-200 border border-cyan-900">{sig}</span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </SectionCard>
-
-                                <SectionCard title="Functional Scope">
-                                    <div className="mb-4">
-                                        <h5 className="text-sm font-semibold text-gray-300 mb-2">Build Items:</h5>
-                                        <ListDisplay items={dData.functional_scope?.build_items} />
-                                    </div>
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-gray-300 mb-2">Integrations:</h5>
-                                        <ListDisplay items={dData.functional_scope?.integrations} />
-                                    </div>
-                                </SectionCard>
-
-                                <SectionCard title="Non-Functional Requirements">
-                                    {Object.entries(dData.non_functional || {}).map(([key, val]) => (
-                                        <div key={key} className="mb-3">
-                                            <h5 className="text-sm font-semibold text-gray-300 capitalize mb-1">{key}:</h5>
-                                            <p className="text-sm text-gray-400 bg-gray-900 p-2 rounded border border-gray-700">
-                                                {JSON.stringify(val)}
-                                            </p>
-                                        </div>
-                                    ))}
-                                </SectionCard>
-                            </div>
-                        ) : (
-                            <div className="text-center py-12 bg-gray-800 rounded border border-dashed border-gray-600">
-                                <p className="text-gray-400 mb-4">{t('project_details_discovery_empty_title')}</p>
-                                <p className="text-sm text-gray-500">{t('project_details_discovery_empty_cta')}</p>
-                            </div>
-                        )}
                     </div>
                 );
             }
@@ -545,17 +760,27 @@ export const ProjectDetails = () => {
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-700">
                                                     {eData.tasks?.slice(0, 10).map((task: unknown, i: number) => {
-                                                        const parsed = toEngineeringTask(task);
+                                                        const t =
+                                                            typeof task === 'object' && task !== null
+                                                                ? (task as Record<string, unknown>)
+                                                                : {};
+                                                        const name = typeof t.name === 'string' ? t.name : '';
+                                                        const domain = typeof t.domain === 'string' ? t.domain : '';
+                                                        const complexity =
+                                                            typeof t.complexity === 'string' || typeof t.complexity === 'number'
+                                                                ? String(t.complexity)
+                                                                : '';
+
                                                         return (
-                                                        <tr key={i} className="hover:bg-gray-700/50">
-                                                            <td className="p-3 text-gray-200">{parsed.name}</td>
-                                                            <td className="p-3">
-                                                                <span className="px-2 py-1 bg-gray-800 rounded text-xs border border-gray-600">
-                                                                    {parsed.domain}
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-3">{parsed.complexity}</td>
-                                                        </tr>
+                                                            <tr key={i} className="hover:bg-gray-700/50">
+                                                                <td className="p-3 text-gray-200">{name}</td>
+                                                                <td className="p-3">
+                                                                    <span className="px-2 py-1 bg-gray-800 rounded text-xs border border-gray-600">
+                                                                        {domain}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-3">{complexity}</td>
+                                                            </tr>
                                                         );
                                                     })}
                                                 </tbody>
@@ -625,14 +850,27 @@ export const ProjectDetails = () => {
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-700">
                                                     {riData.risk_matrix?.map((risk: unknown, i: number) => {
-                                                        const parsed = toRiskMatrixItem(risk);
+                                                        const r =
+                                                            typeof risk === 'object' && risk !== null
+                                                                ? (risk as Record<string, unknown>)
+                                                                : {};
+
+                                                        const description = typeof r.description === 'string' ? r.description : '';
+                                                        const category = typeof r.category === 'string' ? r.category : '';
+                                                        const probability =
+                                                            typeof r.probability === 'string' || typeof r.probability === 'number'
+                                                                ? String(r.probability)
+                                                                : '';
+                                                        const impact = typeof r.impact === 'string' || typeof r.impact === 'number' ? String(r.impact) : '';
+                                                        const mitigation = typeof r.mitigation === 'string' ? r.mitigation : '';
+
                                                         return (
                                                             <tr key={i} className="hover:bg-gray-700/50">
-                                                                <td className="p-3 text-gray-200 font-medium">{parsed.description}</td>
-                                                                <td className="p-3">{parsed.category}</td>
-                                                                <td className="p-3 text-center">{parsed.probability}</td>
-                                                                <td className="p-3 text-center">{parsed.impact}</td>
-                                                                <td className="p-3 text-xs italic">{parsed.mitigation}</td>
+                                                                <td className="p-3 text-gray-200 font-medium">{description}</td>
+                                                                <td className="p-3">{category}</td>
+                                                                <td className="p-3 text-center">{probability}</td>
+                                                                <td className="p-3 text-center">{impact}</td>
+                                                                <td className="p-3 text-xs italic">{mitigation}</td>
                                                             </tr>
                                                         );
                                                     })}
@@ -717,6 +955,7 @@ export const ProjectDetails = () => {
                 );
             }
             case 'documents': {
+                 // Documents might not strictly require everything, but let's say it needs estimation at least
                 const docDisabled = !project.estimation_data;
                 const docData = project.documents_data;
                 return (
@@ -732,18 +971,24 @@ export const ProjectDetails = () => {
                         {docData ? (
                             <div className="grid grid-cols-1 gap-6">
                                 {docData.documents?.map((doc: unknown, i: number) => {
-                                    const parsed = toDocumentItem(doc);
+                                    const d = typeof doc === 'object' && doc !== null ? (doc as Record<string, unknown>) : {};
+                                    const type = typeof d.type === 'string' ? d.type : '';
+                                    const audience = typeof d.audience === 'string' ? d.audience : '';
+                                    const format = typeof d.format === 'string' ? d.format : '';
+                                    const content = typeof d.content === 'string' ? d.content : '';
+                                    const displayContent = normalizeDocumentContentForDisplay(content);
+
                                     return (
-                                    <div key={i} className="bg-gray-800 p-6 rounded border border-gray-700">
+                                        <div key={i} className="bg-gray-800 p-6 rounded border border-gray-700">
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
-                                                <h4 className="text-xl font-bold text-cyan-400 capitalize">{parsed.type.replace(/_/g, ' ')}</h4>
-                                                <p className="text-sm text-gray-400">Audience: {parsed.audience} | Format: {parsed.format}</p>
+                                                <h4 className="text-xl font-bold text-cyan-400 capitalize">{type.replace(/_/g, ' ')}</h4>
+                                                <p className="text-sm text-gray-400">Audience: {audience} | Format: {format}</p>
                                             </div>
                                             <button 
                                                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-bold transition-colors"
                                                 onClick={() => {
-                                                    const blob = new Blob([parsed.content], { type: 'text/markdown' });
+                                                    const blob = new Blob([content], { type: 'text/markdown' });
                                                     const url = URL.createObjectURL(blob);
                                                     window.open(url, '_blank');
                                                 }}
@@ -751,8 +996,8 @@ export const ProjectDetails = () => {
                                                 Download / View
                                             </button>
                                         </div>
-                                        <div className="bg-gray-900 p-4 rounded h-64 overflow-y-auto font-mono text-sm text-gray-300 whitespace-pre-wrap">
-                                            {parsed.content}
+                                        <div className="bg-gray-900 p-4 rounded h-64 overflow-y-auto font-mono text-sm text-gray-300 whitespace-pre-wrap" style={{ textAlign: 'left' }}>
+                                            {displayContent}
                                         </div>
                                     </div>
                                     );
@@ -857,7 +1102,7 @@ export const ProjectDetails = () => {
                         ))}
                     </div>
 
-                    <div className="project-content" style={{ background: 'var(--card-bg)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-color)', minHeight: '400px' }}>
+                    <div className="project-content" style={{ background: 'var(--card-bg)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-color)', minHeight: '400px', textAlign: 'left' }}>
                         {renderTabContent()}
                     </div>
                 </div>

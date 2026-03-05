@@ -205,9 +205,12 @@ export const Projects = () => {
                 setIsDebugModalOpen(true);
             }
             
-            const { _debug: __debug, ...projectData } = result;
-            void __debug;
-            setProjects((prev) => [projectData, ...prev]);
+            const projectData = (() => {
+                const copy = { ...(result as Record<string, unknown>) };
+                delete copy._debug;
+                return copy as unknown as Project;
+            })();
+            setProjects([projectData, ...projects]);
             handleCloseModal();
         } catch (error) {
             console.error('Import project error:', error);

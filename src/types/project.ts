@@ -23,6 +23,7 @@ export interface DiscoveryData {
   missing_information: unknown[];
   confidence_score: number;
   estimation_risk: string;
+  rendered_html?: string;
 }
 
 export interface RiskAnalysisData {

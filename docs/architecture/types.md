@@ -23,6 +23,7 @@ This file defines the core data structures used throughout the application, part
   - `functional_scope`: Build items, integrations.
   - `non_functional`: Performance, availability, security requirements.
   - `confidence_score`: AI-generated confidence score.
+  - `rendered_html` (optional): Pre-rendered HTML version of the discovery report when available.
 
 - **RiskAnalysisData**: Risk assessment results.
   - `estimation_status`: 'ALLOWED' or 'BLOCKED'.
